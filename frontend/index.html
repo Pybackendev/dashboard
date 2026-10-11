@@ -71,6 +71,18 @@
   .btn svg { width: 14px; height: 14px; }
   .btn.spin svg { animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .btn.secondary { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+
+  /* индикатор живого обновления */
+  .live {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12.5px; color: var(--muted); white-space: nowrap;
+  }
+  .live i {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--good);
+    box-shadow: 0 0 0 3px rgba(12, 163, 12, 0.16);
+  }
+  .live.warn i { background: var(--warn); box-shadow: 0 0 0 3px rgba(250, 178, 25, 0.16); }
 
   button:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
 
@@ -88,6 +100,13 @@
   .tile .label { color: var(--ink-2); font-size: 13px; }
   .tile .value { font-size: 28px; font-weight: 650; margin-top: 8px; letter-spacing: -0.02em; }
   .tile.hero .value { font-size: clamp(36px, 7vw, 48px); line-height: 1.1; }
+  .value.bump { animation: bump 0.55s ease-out; }
+  @keyframes bump { from { opacity: 0.4; } to { opacity: 1; } }
+  tr.row-new td { animation: rowFlash 2.6s ease-out; }
+  @keyframes rowFlash {
+    0% { background: rgba(57, 135, 229, 0.22); }
+    100% { background: transparent; }
+  }
   .delta { font-size: 12.5px; margin-top: 8px; color: var(--muted); min-height: 18px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 5px; }
   .delta.up { color: var(--good); }
   .delta.down { color: var(--crit); }
@@ -210,6 +229,13 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
         <span id="syncLabel">Синхронизировать</span>
       </button>
+      <button class="btn secondary" id="simBtn" type="button" title="Создать тестовый заказ в магазине">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span id="simLabel">Симулировать заказ</span>
+      </button>
+      <span class="live" id="live" title="Живое обновление дашборда">
+        <i aria-hidden="true"></i><span id="liveText">подключение…</span>
+      </span>
     </div>
   </header>
 
@@ -349,6 +375,37 @@
   const shortDate = iso => new Date(iso + 'T00:00:00Z').toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', timeZone: 'UTC' });
   const trunc = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
+  // Плавный пересчёт числа в карточке: без него живое обновление читается как рывок.
+  const lastMetrics = { revenue: null, orders: null, avg: null };
+
+  function animateNumber(el, from, to, format) {
+    const duration = 550;
+    const started = performance.now();
+    el.classList.add('bump');
+    const tick = now => {
+      const progress = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = format(from + (to - from) * eased);
+      if (progress < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        el.textContent = format(to);
+        el.classList.remove('bump');
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
+  function setMetric(el, key, value, format) {
+    const from = lastMetrics[key];
+    lastMetrics[key] = value;
+    if (from === null || from === value || reduceMotion) {
+      el.textContent = format(value);
+      return;
+    }
+    animateNumber(el, from, value, format);
+  }
+
   function parseUtc(s) {
     if (!s) return null;
     const hasTz = /Z|[+-]\d\d:?\d\d$/.test(s);
@@ -356,13 +413,16 @@
     return isNaN(d) ? null : d;
   }
 
+  const TOAST_MS = 2600;
+  const ORDER_TOAST_MS = 6000;   // уведомление о новом заказе читают, а не пролистывают
+
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, ms = TOAST_MS) {
     const t = $('toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+    toastTimer = setTimeout(() => t.classList.remove('show'), ms);
   }
 
   async function getJSON(url) {
@@ -446,9 +506,9 @@
   }
 
   function renderTiles(s, products) {
-    $('vRevenue').textContent = money(s.total_revenue);
-    $('vOrders').textContent = num(s.orders_count);
-    $('vAvg').textContent = money(s.avg_check, 2);
+    setMetric($('vRevenue'), 'revenue', s.total_revenue, v => money(v));
+    setMetric($('vOrders'), 'orders', s.orders_count, v => num(Math.round(v)));
+    setMetric($('vAvg'), 'avg', s.avg_check, v => money(v, 2));
     const prev = s.prev || null;
     if (prev) {
       setDelta($('dRevenue'), s.total_revenue, prev.total_revenue);
@@ -604,16 +664,17 @@
     return { cls: 'neutral', icon: '○' };
   }
 
-  function renderOrders(orders) {
+  function renderOrders(orders, highlight = []) {
     if (!orders.length) {
       $('orderRows').innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Заказов пока нет — нажмите «Синхронизировать»</td></tr>';
       return;
     }
+    const fresh = new Set(highlight);
     $('orderRows').innerHTML = orders.map(o => {
       const d = parseUtc(o.created_at);
       const date = d ? d.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
       const st = statusInfo(o.status);
-      return `<tr>
+      return `<tr${fresh.has(o.id) ? ' class="row-new"' : ''}>
         <td class="strong">#${esc(o.id)}</td>
         <td>${esc(date)}</td>
         <td>${esc(o.customer || '—')}</td>
@@ -655,7 +716,7 @@
   }
 
   // ====== загрузка ======
-  async function loadAll() {
+  async function loadAll(highlight = []) {
     document.body.classList.add('loading');
     $('error').classList.remove('show');
     try {
@@ -667,7 +728,7 @@
       renderTiles(stats, products);
       renderRevenue(stats);
       renderTop(stats);
-      renderOrders(orders);
+      renderOrders(orders, highlight);
       renderStock(products);
       renderLastSync(stats);
     } catch (e) {
@@ -717,10 +778,65 @@
   $('viewChart').addEventListener('click', () => setView(false));
   $('viewTable').addEventListener('click', () => setView(true));
 
+  // ====== живое обновление (SSE) ======
+  function setLive(state, text) {
+    $('live').className = state ? 'live ' + state : 'live';
+    $('liveText').textContent = text;
+  }
+
+  function handleLiveOrders(payload) {
+    const fresh = (payload && payload.orders) || [];
+    if (!fresh.length) return;
+    const latest = fresh[fresh.length - 1];
+    const more = fresh.length > 1 ? ` (+${fresh.length - 1})` : '';
+    toast(`Новый заказ #${latest.id} на ${money(latest.total, 2)}${more}`, ORDER_TOAST_MS);
+    loadAll(fresh.map(o => o.id));
+  }
+
+  function connectStream() {
+    if (!('EventSource' in window)) {
+      setLive('warn', 'без live-обновлений');
+      return;
+    }
+    const stream = new EventSource('/api/events');
+    stream.addEventListener('hello', () => setLive('', 'в эфире'));
+    stream.addEventListener('orders', event => {
+      try {
+        handleLiveOrders(JSON.parse(event.data));
+      } catch (e) {
+        console.error(e);
+      }
+    });
+    stream.addEventListener('error', () => setLive('warn', 'переподключение…'));
+  }
+
+  async function simulateOrder() {
+    const btn = $('simBtn');
+    btn.disabled = true;
+    btn.classList.add('spin');
+    $('simLabel').textContent = 'Создаём заказ…';
+    try {
+      const res = await fetch('/api/simulate', { method: 'POST' });
+      if (!res.ok) throw new Error('simulate ' + res.status);
+      const data = await res.json();
+      // Если поток событий недоступен, обновляем дашборд вручную.
+      if (!data.new_orders) await loadAll();
+    } catch (e) {
+      console.error(e);
+      toast('Не удалось создать демо-заказ');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('spin');
+      $('simLabel').textContent = 'Симулировать заказ';
+    }
+  }
+
   $('syncBtn').addEventListener('click', runSync);
+  $('simBtn').addEventListener('click', simulateOrder);
   $('retryBtn').addEventListener('click', loadAll);
 
   loadAll();
+  connectStream();
 </script>
 </body>
 </html>

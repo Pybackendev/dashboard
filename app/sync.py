@@ -1,31 +1,32 @@
 import logging
 import traceback
+from dataclasses import dataclass, field
 from datetime import datetime
 
-import pymysql
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from config import settings
 from models import Order, OrderItem, Product, SyncLog
+from opencart import get_opencart_connection
 
 log = logging.getLogger("sync")
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 
 
-def get_opencart_connection():
-    """Подключение к OpenCart (только чтение)."""
-    return pymysql.connect(
-        host=settings.opencart_host,
-        port=settings.opencart_port,
-        user=settings.opencart_user,
-        password=settings.opencart_password,
-        database=settings.opencart_db,
-        charset="utf8mb4",
-        connect_timeout=10,
-        cursorclass=pymysql.cursors.DictCursor,
-    )
+@dataclass
+class SyncResult:
+    """Итог одного прохода синхронизации.
+
+    new_orders нужен, чтобы приложение могло разослать событие о свежих
+    заказах в дашборд (SSE), а не только записать счётчик в sync_log.
+    """
+    new_orders: list = field(default_factory=list)
+
+    @property
+    def new_count(self) -> int:
+        return len(self.new_orders)
 
 
 def _read_opencart():
@@ -59,7 +60,7 @@ def _read_opencart():
 
 
 def sync():
-    """Один проход синхронизации. Возвращает число новых заказов."""
+    """Один проход синхронизации. Возвращает SyncResult."""
     try:
         orders, items, products = _read_opencart()
 
@@ -113,9 +114,20 @@ def sync():
                         price=float(p["price"]),
                     ))
 
-            db.add(SyncLog(synced_at=datetime.utcnow(), orders_synced=len(new_orders), status="ok"))
+            added = [
+                {
+                    "id": oid,
+                    "customer": obj.customer_name or "",
+                    "total": obj.total,
+                    "created_at": obj.created_at.isoformat() if obj.created_at else None,
+                    "status": obj.status,
+                }
+                for oid, obj in new_orders.items()
+            ]
+
+            db.add(SyncLog(synced_at=datetime.utcnow(), orders_synced=len(added), status="ok"))
             db.commit()
-        return len(new_orders)
+        return SyncResult(new_orders=added)
 
     except Exception as e:
         log.error("sync failed: %s", e)

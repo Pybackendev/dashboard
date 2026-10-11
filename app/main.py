@@ -4,14 +4,16 @@ import os
 import time
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import Base, Order, OrderItem, Product, SyncLog
 from config import settings
 from datetime import datetime, timedelta
-from sync import sync, engine
+from events import event_stream, publish, subscriber_count
+from simulate import create_demo_order
+from sync import SyncResult, engine, sync
 
 log = logging.getLogger("app")
 app = FastAPI(title="Shop dashboard")
@@ -113,26 +115,71 @@ def get_products():
             for p in products
         ]
 
+async def _announce(result: SyncResult) -> None:
+    """Рассылает свежие заказы всем открытым дашбордам (SSE)."""
+    if not result.new_count:
+        return
+    delivered = await publish("orders", {"orders": result.new_orders})
+    log.info("announced %s new order(s) to %s client(s)", result.new_count, delivered)
+
+
 @app.post("/api/sync")
-def run_sync():
+async def run_sync():
     try:
-        new = sync()
+        result = await asyncio.to_thread(sync)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Sync failed: {str(e)[:200]}")
-    return {"status": "ok", "new_orders": new}
+    await _announce(result)
+    return {"status": "ok", "new_orders": result.new_count}
+
+
+@app.get("/api/events")
+async def get_events():
+    """Поток событий: дашборд живое обновление получает отсюда."""
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/live")
+def get_live():
+    """Служебное: сколько дашбордов сейчас слушают поток событий."""
+    return {"subscribers": subscriber_count()}
+
+
+@app.post("/api/simulate")
+async def run_simulate():
+    """Демо-заказ: создаётся в OpenCart, затем идёт обычным путём через sync."""
+    try:
+        order = await asyncio.to_thread(create_demo_order)
+        result = await asyncio.to_thread(sync)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Simulate failed: {str(e)[:200]}")
+    await _announce(result)
+    return {"status": "ok", "order": order, "new_orders": result.new_count}
 
 
 def _safe_sync():
+    """Синхронизация для фона и старта: не роняет приложение.
+    Возвращает SyncResult либо None, если проход упал."""
     try:
-        sync()
+        return sync()
     except Exception:
-        pass  # ошибка уже залогирована и записана в sync_log
+        return None  # ошибка уже залогирована и записана в sync_log
 
 
 async def _periodic_sync():
     while True:
         await asyncio.sleep(max(1, settings.sync_interval_minutes) * 60)
-        await asyncio.to_thread(_safe_sync)
+        result = await asyncio.to_thread(_safe_sync)
+        if result is not None:
+            await _announce(result)
 
 
 @app.on_event("startup")
@@ -149,5 +196,7 @@ async def startup():
         raise RuntimeError("Postgres is not reachable")
 
     # Первая синхронизация не должна валить приложение (OpenCart может быть ещё не установлен)
-    await asyncio.to_thread(_safe_sync)
+    first = await asyncio.to_thread(_safe_sync)
+    if first is not None:
+        await _announce(first)
     asyncio.create_task(_periodic_sync())
