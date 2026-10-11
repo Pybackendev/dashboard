@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Store Analytics</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a1a19'/%3E%3Cpath d='M7 22l6-7 4 4 8-10' fill='none' stroke='%233987e5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --good: #0ca30c;
+    --warn: #fab219;
+    --crit: #d03b3b;
+    --radius: 14px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--page);
+    color: var(--ink);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+
+  /* ---------- header ---------- */
+  .top {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  .top h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+  .top .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .seg {
+    display: inline-flex; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; gap: 2px;
+  }
+  .seg button {
+    appearance: none; border: 0; background: transparent; color: var(--ink-2);
+    font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .seg button:hover { background: rgba(255, 255, 255, 0.06); }
+  .seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--border); }
+
+  .btn {
+    appearance: none; font: inherit; font-size: 13px; cursor: pointer;
+    color: var(--ink); background: var(--series-1); border: 0; border-radius: 10px;
+    padding: 8px 14px; display: inline-flex; align-items: center; gap: 8px;
+    transition: filter .15s, opacity .15s;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:disabled { opacity: .6; cursor: progress; }
+  .btn svg { width: 14px; height: 14px; }
+  .btn.spin svg { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  button:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; font-weight: 600; }
+  .card .hint { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  /* ---------- KPI tiles ---------- */
+  .tiles { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .tile .label { color: var(--ink-2); font-size: 13px; }
+  .tile .value { font-size: 28px; font-weight: 650; margin-top: 8px; letter-spacing: -0.02em; }
+  .tile.hero .value { font-size: clamp(36px, 7vw, 48px); line-height: 1.1; }
+  .delta { font-size: 12.5px; margin-top: 8px; color: var(--muted); min-height: 18px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 5px; }
+  .delta.up { color: var(--good); }
+  .delta.down { color: var(--crit); }
+  .delta .tail { color: var(--muted); }
+  body.loading .tile .value { opacity: .35; }
+
+  /* ---------- grids ---------- */
+  .row { display: grid; gap: 14px; margin-bottom: 14px; }
+  .row > *, .tiles > * { min-width: 0; }
+  .row.r1 { grid-template-columns: 1.6fr 1fr; }
+  .row.r2 { grid-template-columns: 1.6fr 1fr; }
+
+  .chart-box { position: relative; height: 280px; }
+  .empty {
+    display: none; position: absolute; inset: 0; align-items: center; justify-content: center;
+    text-align: center; color: var(--muted); font-size: 13.5px; padding: 0 20px;
+  }
+  .chart-box.is-empty canvas { visibility: hidden; }
+  .chart-box.is-empty .empty { display: flex; }
+
+  .toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .toggle button {
+    appearance: none; border: 0; background: transparent; color: var(--muted);
+    font: inherit; font-size: 12px; padding: 5px 10px; cursor: pointer;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th {
+    text-align: left; color: var(--muted); font-weight: 500; font-size: 12px;
+    padding: 0 10px 10px 0; border-bottom: 1px solid var(--grid); white-space: nowrap;
+  }
+  td { padding: 11px 10px 11px 0; border-bottom: 1px solid var(--grid); color: var(--ink-2); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
+  td.strong { color: var(--ink); }
+  .table-scroll { max-height: 280px; overflow: auto; }
+  #revTable { display: none; }
+  #revTable.show { display: block; }
+
+  /* ---------- status ---------- */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    padding: 3px 9px 3px 7px; border-radius: 999px; border: 1px solid var(--border);
+    color: var(--ink-2); background: var(--surface-2);
+  }
+  .pill i { font-style: normal; font-size: 11px; line-height: 1; }
+  .pill.good i { color: var(--good); }
+  .pill.warn i { color: var(--warn); }
+  .pill.crit i { color: var(--crit); }
+  .pill.neutral i { color: var(--muted); }
+
+  /* ---------- stock list ---------- */
+  .stock { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  .stock li { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; }
+  .stock .name { color: var(--ink); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meter { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+  .meter span { display: block; height: 100%; border-radius: 3px; }
+  .meter .good { background: var(--good); }
+  .meter .warn { background: var(--warn); }
+  .meter .crit { background: var(--crit); }
+
+  /* ---------- error / toast ---------- */
+  .error {
+    display: none; align-items: center; justify-content: space-between; gap: 12px;
+    background: rgba(208, 59, 59, 0.12); border: 1px solid rgba(208, 59, 59, 0.45);
+    color: var(--ink); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; font-size: 13.5px;
+  }
+  .error.show { display: flex; }
+  .error button {
+    appearance: none; font: inherit; font-size: 13px; color: var(--ink); background: transparent;
+    border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; cursor: pointer;
+  }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+    padding: 10px 16px; border-radius: 10px; font-size: 13.5px; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; z-index: 10;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 900px) {
+    .tiles { grid-template-columns: 1fr 1fr; }
+    .tile.hero, .tile:last-child { grid-column: 1 / -1; }
+    .row.r1, .row.r2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    .delta .tail { flex-basis: 100%; }
+  }
+  @media (max-width: 520px) {
+    .wrap { padding: 16px 12px 40px; }
+    .card { padding: 16px; }
+    .chart-box { height: 240px; }
+    .controls { width: 100%; justify-content: space-between; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body class="loading">
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>Store Analytics</h1>
+      <p class="sub">Заказы и остатки из OpenCart · <span id="lastSync">загрузка…</span></p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Период">
+        <button type="button" data-days="7" aria-pressed="true">7 дней</button>
+        <button type="button" data-days="30" aria-pressed="false">30 дней</button>
+        <button type="button" data-days="90" aria-pressed="false">90 дней</button>
+      </div>
+      <button class="btn" id="syncBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        <span id="syncLabel">Синхронизировать</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="error" id="error" role="alert">
+    <span id="errorText">Не удалось загрузить данные.</span>
+    <button type="button" id="retryBtn">Повторить</button>
+  </div>
+
+  <!-- KPI -->
+  <section class="tiles" aria-label="Ключевые показатели">
+    <article class="card tile hero">
+      <div class="label">Выручка</div>
+      <div class="value" id="vRevenue">—</div>
+      <div class="delta" id="dRevenue"></div>
+    </article>
+    <article class="card tile">
+      <div class="label">Заказов</div>
+      <div class="value" id="vOrders">—</div>
+      <div class="delta" id="dOrders"></div>
+    </article>
+    <article class="card tile">
+      <div class="label">Средний чек</div>
+      <div class="value" id="vAvg">—</div>
+      <div class="delta" id="dAvg"></div>
+    </article>
+    <article class="card tile">
+      <div class="label">Мало на складе</div>
+      <div class="value" id="vLow">—</div>
+      <div class="delta" id="dLow">Остаток 5 шт. и меньше</div>
+    </article>
+  </section>
+
+  <!-- revenue + top -->
+  <section class="row r1">
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Выручка по дням</h2>
+          <div class="hint" id="revHint">за 7 дней</div>
+        </div>
+        <div class="toggle" role="group" aria-label="Вид">
+          <button type="button" id="viewChart" aria-pressed="true">График</button>
+          <button type="button" id="viewTable" aria-pressed="false">Таблица</button>
+        </div>
+      </div>
+      <div class="chart-box" id="revBox">
+        <canvas id="revenueChart" role="img" aria-label="График выручки по дням"></canvas>
+        <div class="empty">За выбранный период заказов нет</div>
+      </div>
+      <div class="table-scroll" id="revTable">
+        <table>
+          <thead><tr><th>Дата</th><th class="num">Выручка</th></tr></thead>
+          <tbody id="revRows"></tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Топ-5 товаров</h2>
+          <div class="hint">по количеству проданных штук</div>
+        </div>
+      </div>
+      <div class="chart-box" id="topBox">
+        <canvas id="topChart" role="img" aria-label="Топ-5 товаров по продажам"></canvas>
+        <div class="empty">За выбранный период продаж нет</div>
+      </div>
+    </article>
+  </section>
+
+  <!-- orders + stock -->
+  <section class="row r2">
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Последние заказы</h2>
+          <div class="hint">10 самых свежих</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>№</th><th>Дата</th><th>Клиент</th><th>Статус</th><th class="num">Сумма</th></tr>
+          </thead>
+          <tbody id="orderRows">
+            <tr><td colspan="5" style="color:var(--muted)">Загрузка…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Остатки</h2>
+          <div class="hint">товары с наименьшим запасом</div>
+        </div>
+      </div>
+      <ul class="stock" id="stockList"></ul>
+    </article>
+  </section>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  // ====== настройки ======
+  const CURRENCY = 'USD';          // валюта магазина в OpenCart (USD, UAH, EUR ...)
+  const LOW_STOCK = 5;             // порог «мало на складе»
+  const STOCK_ITEMS = 8;           // сколько товаров показывать в блоке «Остатки»
+
+  // ====== токены цвета (те же, что в CSS) ======
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    surface: css.getPropertyValue('--surface').trim(),
+    surface2: css.getPropertyValue('--surface-2').trim(),
+    ink: css.getPropertyValue('--ink').trim(),
+    ink2: css.getPropertyValue('--ink-2').trim(),
+    muted: css.getPropertyValue('--muted').trim(),
+    grid: css.getPropertyValue('--grid').trim(),
+    axis: css.getPropertyValue('--axis').trim(),
+    series: css.getPropertyValue('--series-1').trim(),
+  };
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ====== утилиты ======
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+  const money = (n, digits = 0) => new Intl.NumberFormat('ru-RU', {
+    style: 'currency', currency: CURRENCY, maximumFractionDigits: digits, minimumFractionDigits: digits,
+  }).format(n || 0);
+  const num = n => new Intl.NumberFormat('ru-RU').format(n || 0);
+  const shortDate = iso => new Date(iso + 'T00:00:00Z').toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+  const trunc = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+  function parseUtc(s) {
+    if (!s) return null;
+    const hasTz = /Z|[+-]\d\d:?\d\d$/.test(s);
+    const d = new Date(hasTz ? s : s + 'Z');
+    return isNaN(d) ? null : d;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  async function getJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(url + ' → ' + res.status);
+    return res.json();
+  }
+
+  // ====== состояние ======
+  let days = 7;
+  let revenueChart = null;
+  let topChart = null;
+
+  // ====== плагины Chart.js ======
+  // вертикальная линия-перекрестие под курсором
+  const crosshair = {
+    id: 'crosshair',
+    afterDatasetsDraw(chart) {
+      const active = chart.tooltip && chart.tooltip.getActiveElements();
+      if (!active || !active.length) return;
+      const { ctx, chartArea: a } = chart;
+      const x = active[0].element.x;
+      ctx.save();
+      ctx.strokeStyle = C.axis;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, a.top);
+      ctx.lineTo(x, a.bottom);
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
+  // значение на конце каждого столбца
+  const barValues = {
+    id: 'barValues',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      const meta = chart.getDatasetMeta(0);
+      ctx.save();
+      ctx.fillStyle = C.ink2;
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      meta.data.forEach((bar, i) => {
+        ctx.fillText(num(chart.data.datasets[0].data[i]), bar.x + 8, bar.y);
+      });
+      ctx.restore();
+    },
+  };
+
+  const tooltipBase = {
+    backgroundColor: C.surface2,
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    titleColor: C.ink,
+    bodyColor: C.ink2,
+    padding: 10,
+    displayColors: false,
+    cornerRadius: 8,
+  };
+
+  // ====== рендер ======
+  function pct(cur, prev) {
+    if (!prev) return null;
+    return ((cur - prev) / prev) * 100;
+  }
+
+  function setDelta(el, cur, prev, goodWhenUp = true) {
+    const p = pct(cur, prev);
+    el.className = 'delta';
+    if (p === null) {
+      el.innerHTML = '<span class="tail">нет данных за прошлый период</span>';
+      return;
+    }
+    const rounded = Math.round(p * 10) / 10;
+    const up = rounded > 0, flat = rounded === 0;
+    const good = flat ? null : (up === goodWhenUp);
+    if (!flat) el.classList.add(good ? 'up' : 'down');
+    const arrow = flat ? '■' : (up ? '▲' : '▼');
+    const sign = up ? '+' : '';
+    el.innerHTML = `<span aria-hidden="true">${arrow}</span><span>${sign}${rounded.toLocaleString('ru-RU')}%</span><span class="tail">к прошлому периоду</span>`;
+  }
+
+  function renderTiles(s, products) {
+    $('vRevenue').textContent = money(s.total_revenue);
+    $('vOrders').textContent = num(s.orders_count);
+    $('vAvg').textContent = money(s.avg_check, 2);
+    const prev = s.prev || null;
+    if (prev) {
+      setDelta($('dRevenue'), s.total_revenue, prev.total_revenue);
+      setDelta($('dOrders'), s.orders_count, prev.orders_count);
+      setDelta($('dAvg'), s.avg_check, prev.avg_check);
+    } else {
+      ['dRevenue', 'dOrders', 'dAvg'].forEach(id => { $(id).className = 'delta'; $(id).textContent = ''; });
+    }
+    const low = products.filter(p => p.quantity <= LOW_STOCK).length;
+    $('vLow').textContent = (products.length >= 20 && low === products.length) ? low + '+' : num(low);
+  }
+
+  function dayKeys(n, data) {
+    const keys = new Set(Object.keys(data));
+    for (let i = 0; i < n; i++) {
+      keys.add(new Date(Date.now() - i * 864e5).toISOString().slice(0, 10));
+    }
+    return [...keys].sort();
+  }
+
+  function renderRevenue(s) {
+    const keys = dayKeys(days, s.revenue_by_day || {});
+    const values = keys.map(k => Math.round((s.revenue_by_day[k] || 0) * 100) / 100);
+    $('revHint').textContent = 'за ' + days + ' ' + (days === 7 ? 'дней' : 'дней');
+
+    // таблица (альтернативный вид — для доступности)
+    $('revRows').innerHTML = keys.slice().reverse().map((k, i) => {
+      const v = values[keys.length - 1 - i];
+      return `<tr><td>${esc(shortDate(k))}</td><td class="num strong">${esc(money(v))}</td></tr>`;
+    }).join('');
+
+    const box = $('revBox');
+    const empty = s.orders_count === 0;
+    box.classList.toggle('is-empty', empty);
+    if (revenueChart) { revenueChart.destroy(); revenueChart = null; }
+    if (empty) return;
+
+    revenueChart = new Chart($('revenueChart'), {
+      type: 'line',
+      data: {
+        labels: keys,
+        datasets: [{
+          label: 'Выручка',
+          data: values,
+          borderColor: C.series,
+          backgroundColor: 'rgba(57,135,229,0.10)',
+          borderWidth: 2,
+          borderJoinStyle: 'round',
+          borderCapStyle: 'round',
+          fill: true,
+          tension: 0.35,
+          cubicInterpolationMode: 'monotone',
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: C.series,
+          pointHoverBorderColor: C.surface,
+          pointHoverBorderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: reduceMotion ? false : { duration: 400 },
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { color: C.axis },
+            ticks: { color: C.muted, maxTicksLimit: 7, maxRotation: 0, callback(v) { return shortDate(this.getLabelForValue(v)); } },
+          },
+          y: {
+            beginAtZero: true,
+            grid: { color: C.grid },
+            border: { display: false },
+            ticks: { color: C.muted, maxTicksLimit: 5, callback: v => num(v) },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltipBase,
+            callbacks: {
+              title: items => shortDate(items[0].label),
+              label: item => 'Выручка: ' + money(item.parsed.y),
+            },
+          },
+        },
+      },
+      plugins: [crosshair],
+    });
+  }
+
+  function renderTop(s) {
+    const items = s.top_products || [];
+    const box = $('topBox');
+    box.classList.toggle('is-empty', items.length === 0);
+    if (topChart) { topChart.destroy(); topChart = null; }
+    if (!items.length) return;
+
+    topChart = new Chart($('topChart'), {
+      type: 'bar',
+      data: {
+        labels: items.map(p => p.name),
+        datasets: [{
+          label: 'Продано, шт.',
+          data: items.map(p => p.qty),
+          backgroundColor: C.series,
+          borderRadius: { topRight: 4, bottomRight: 4, topLeft: 0, bottomLeft: 0 },
+          borderSkipped: false,
+          maxBarThickness: 22,
+          categoryPercentage: 0.7,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: reduceMotion ? false : { duration: 400 },
+        layout: { padding: { right: 40 } },
+        scales: {
+          x: {
+            beginAtZero: true,
+            grid: { color: C.grid },
+            border: { display: false },
+            ticks: { color: C.muted, precision: 0, maxTicksLimit: 5 },
+          },
+          y: {
+            grid: { display: false },
+            border: { color: C.axis },
+            ticks: { color: C.ink2, callback(v) { return trunc(this.getLabelForValue(v), 20); } },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltipBase,
+            callbacks: {
+              title: items => items[0].label,
+              label: item => 'Продано: ' + num(item.parsed.x) + ' шт.',
+            },
+          },
+        },
+      },
+      plugins: [barValues],
+    });
+  }
+
+  function statusInfo(name) {
+    const s = String(name || '').toLowerCase();
+    if (/(complete|deliver|выполн|заверш|достав)/.test(s)) return { cls: 'good', icon: '✓' };
+    if (/(cancel|fail|refund|denied|revers|void|отмен|возврат)/.test(s)) return { cls: 'crit', icon: '✕' };
+    if (/(pending|process|ship|ожид|обраб|отправ)/.test(s)) return { cls: 'warn', icon: '●' };
+    return { cls: 'neutral', icon: '○' };
+  }
+
+  function renderOrders(orders) {
+    if (!orders.length) {
+      $('orderRows').innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Заказов пока нет — нажмите «Синхронизировать»</td></tr>';
+      return;
+    }
+    $('orderRows').innerHTML = orders.map(o => {
+      const d = parseUtc(o.created_at);
+      const date = d ? d.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+      const st = statusInfo(o.status);
+      return `<tr>
+        <td class="strong">#${esc(o.id)}</td>
+        <td>${esc(date)}</td>
+        <td>${esc(o.customer || '—')}</td>
+        <td><span class="pill ${st.cls}"><i aria-hidden="true">${st.icon}</i>${esc(o.status || '—')}</span></td>
+        <td class="num strong">${esc(money(o.total, 2))}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function stockState(q) {
+    if (q <= 0) return { cls: 'crit', icon: '✕', label: 'Нет в наличии' };
+    if (q <= LOW_STOCK) return { cls: 'warn', icon: '●', label: 'Мало' };
+    return { cls: 'good', icon: '✓', label: 'В наличии' };
+  }
+
+  function renderStock(products) {
+    const list = products.slice(0, STOCK_ITEMS);
+    if (!list.length) {
+      $('stockList').innerHTML = '<li style="color:var(--muted);font-size:13.5px">Товаров пока нет</li>';
+      return;
+    }
+    const scale = Math.max(20, ...list.map(p => p.quantity));
+    $('stockList').innerHTML = list.map(p => {
+      const st = stockState(p.quantity);
+      const w = Math.max(3, Math.min(100, (p.quantity / scale) * 100));
+      return `<li>
+        <span class="name" title="${esc(p.name)}">${esc(p.name)}</span>
+        <span class="pill ${st.cls}"><i aria-hidden="true">${st.icon}</i>${esc(st.label)} · ${esc(num(p.quantity))} шт.</span>
+        <div class="meter" aria-hidden="true"><span class="${st.cls}" style="width:${w}%"></span></div>
+      </li>`;
+    }).join('');
+  }
+
+  function renderLastSync(s) {
+    const d = parseUtc(s.last_sync);
+    $('lastSync').textContent = d
+      ? 'обновлено ' + d.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : 'синхронизация ещё не запускалась';
+  }
+
+  // ====== загрузка ======
+  async function loadAll() {
+    document.body.classList.add('loading');
+    $('error').classList.remove('show');
+    try {
+      const [stats, products, orders] = await Promise.all([
+        getJSON('/api/stats?days=' + days),
+        getJSON('/api/products'),
+        getJSON('/api/orders?limit=10'),
+      ]);
+      renderTiles(stats, products);
+      renderRevenue(stats);
+      renderTop(stats);
+      renderOrders(orders);
+      renderStock(products);
+      renderLastSync(stats);
+    } catch (e) {
+      console.error(e);
+      $('errorText').textContent = 'Не удалось загрузить данные. Проверьте, что API запущен.';
+      $('error').classList.add('show');
+    } finally {
+      document.body.classList.remove('loading');
+    }
+  }
+
+  async function runSync() {
+    const btn = $('syncBtn');
+    btn.disabled = true;
+    btn.classList.add('spin');
+    $('syncLabel').textContent = 'Синхронизация…';
+    try {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      if (!res.ok) throw new Error('sync ' + res.status);
+      await loadAll();
+      toast('Данные обновлены');
+    } catch (e) {
+      console.error(e);
+      toast('Синхронизация не удалась');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('spin');
+      $('syncLabel').textContent = 'Синхронизировать';
+    }
+  }
+
+  // ====== события ======
+  document.querySelectorAll('.seg button').forEach(b => {
+    b.addEventListener('click', () => {
+      days = Number(b.dataset.days);
+      document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      loadAll();
+    });
+  });
+
+  function setView(table) {
+    $('viewChart').setAttribute('aria-pressed', String(!table));
+    $('viewTable').setAttribute('aria-pressed', String(table));
+    $('revBox').style.display = table ? 'none' : '';
+    $('revTable').classList.toggle('show', table);
+  }
+  $('viewChart').addEventListener('click', () => setView(false));
+  $('viewTable').addEventListener('click', () => setView(true));
+
+  $('syncBtn').addEventListener('click', runSync);
+  $('retryBtn').addEventListener('click', loadAll);
+
+  loadAll();
+</script>
+</body>
+</html>

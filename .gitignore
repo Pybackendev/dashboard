@@ -1,0 +1,13 @@
+# секреты
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ide / os
+.idea/
+.vscode/
+.DS_Store

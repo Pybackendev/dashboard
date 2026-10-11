@@ -1,0 +1,32 @@
+# Прод: только дашборд + Postgres. Данные магазина берутся из реального OpenCart
+# (укажи OPENCART_HOST/USER/PASSWORD/DB в .env).
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: dashboard
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dashboard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: always
+
+  app:
+    build: ./app
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./frontend:/frontend
+    restart: always
+
+volumes:
+  postgres_data:
