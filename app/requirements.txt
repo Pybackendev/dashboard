@@ -5,3 +5,5 @@ psycopg[binary]
 pymysql
 cryptography
 pydantic-settings
+alembic
+tzdata

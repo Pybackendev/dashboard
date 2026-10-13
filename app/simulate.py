@@ -11,6 +11,8 @@
 import logging
 import random
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
+from zoneinfo import ZoneInfo
 
 from config import settings
 from opencart import get_opencart_connection
@@ -26,12 +28,13 @@ BUYERS = (
 
 DEMO_EMAIL = "simulate@demo.local"
 DEMO_PHONE = "+380441234567"
-CURRENCY_CODE = "USD"
+CURRENCY_CODE = settings.currency
 STORE_ID = 0
 STORE_NAME = "Your Store"
 LANGUAGE_ID = 1
 
 MAX_LINE_ITEMS = 3
+MAX_DEMO_ORDER_TOTAL = Decimal("7000")  # близько 2× середнього чека демо
 QUANTITY_CHOICES = (1, 1, 1, 1, 2, 2, 3)
 PREFERRED_STATUS = "Processing"
 
@@ -125,18 +128,37 @@ def _pick_line_items(cur):
 
     in_stock = [product for product in products if int(product["quantity"]) > 0]
     pool = in_stock or products
-    picked = random.sample(pool, min(MAX_LINE_ITEMS, len(pool)))
-
-    return [
-        {
+    random.shuffle(pool)
+    picked = []
+    total = Decimal("0")
+    for product in pool:
+        quantity = random.choice(QUANTITY_CHOICES)
+        price = Decimal(str(product["price"]))
+        if total + price * quantity > MAX_DEMO_ORDER_TOTAL:
+            continue
+        picked.append({
             "product_id": product["product_id"],
             "name": (product["name"] or "")[:200],
             "model": (product["model"] or "")[:64],
-            "quantity": random.choice(QUANTITY_CHOICES),
-            "price": float(product["price"]),
-        }
-        for product in picked
-    ]
+            "quantity": quantity,
+            "price": price,
+        })
+        total += price * quantity
+        if len(picked) >= MAX_LINE_ITEMS:
+            break
+    if not picked:
+        affordable = [product for product in pool if Decimal(str(product["price"])) <= MAX_DEMO_ORDER_TOTAL]
+        if not affordable:
+            raise RuntimeError("немає товарів у межах ліміту суми тестового замовлення")
+        product = random.choice(affordable)
+        picked.append({
+            "product_id": product["product_id"],
+            "name": (product["name"] or "")[:200],
+            "model": (product["model"] or "")[:64],
+            "quantity": 1,
+            "price": Decimal(str(product["price"])),
+        })
+    return picked
 
 
 def _party(prefix, firstname, lastname, method_key, method, code_key, code):
@@ -150,7 +172,7 @@ def _party(prefix, firstname, lastname, method_key, method, code_key, code):
 
 def create_demo_order():
     """Создаёт заказ в OpenCart и списывает остатки. Возвращает описание заказа."""
-    now = datetime.now().replace(microsecond=0)
+    now = datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None, microsecond=0)
     firstname, lastname = random.choice(BUYERS)
 
     connection = get_opencart_connection()
@@ -158,7 +180,8 @@ def create_demo_order():
         with connection.cursor() as cur:
             status_id, status_name = _resolve_status(cur)
             lines = _pick_line_items(cur)
-            total = round(sum(line["price"] * line["quantity"] for line in lines), 2)
+            total = sum((line["price"] * line["quantity"] for line in lines), Decimal("0"))
+            total = total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             order_columns = _required_columns(cur, "order")
             item_columns = _required_columns(cur, "order_product")
@@ -192,7 +215,9 @@ def create_demo_order():
                     "model": line["model"],
                     "quantity": line["quantity"],
                     "price": line["price"],
-                    "total": round(line["price"] * line["quantity"], 2),
+                    "total": (line["price"] * line["quantity"]).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    ),
                 }, now)
                 cur.execute(
                     f"UPDATE `{settings.opencart_prefix}product` "
@@ -208,8 +233,8 @@ def create_demo_order():
     return {
         "id": order_id,
         "customer": f"{firstname} {lastname}",
-        "total": total,
-        "created_at": now.isoformat(),
+        "total": float(total),
+        "created_at": now.replace(tzinfo=ZoneInfo(settings.timezone)).isoformat(),
         "status": status_name,
         "items": [f"{line['name']} × {line['quantity']}" for line in lines],
     }

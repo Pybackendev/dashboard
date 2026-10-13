@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: shop-dashboard-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r app/requirements.txt
+    startCommand: cd app && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DEMO_MODE
+        value: "true"
+      - key: TIMEZONE
+        value: Europe/Kyiv
+      - key: CURRENCY
+        value: UAH
+      - key: LOW_STOCK_THRESHOLD
+        value: "5"
+      - key: SIMULATE_COOLDOWN_SECONDS
+        value: "10"
+      - key: SIMULATE_LIMIT_PER_HOUR
+        value: "6"

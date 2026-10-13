@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
-<title>Store Analytics</title>
+<title>Аналітика магазину</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a1a19'/%3E%3Cpath d='M7 22l6-7 4 4 8-10' fill='none' stroke='%233987e5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="/static/vendor/chart.umd.min.js"></script>
 <style>
   :root {
     color-scheme: dark;
@@ -15,7 +15,7 @@
     --surface-2: #232321;
     --ink: #ffffff;
     --ink-2: #c3c2b7;
-    --muted: #898781;
+    --muted: #a5a49d;
     --grid: #2c2c2a;
     --axis: #383835;
     --border: rgba(255, 255, 255, 0.10);
@@ -47,6 +47,23 @@
   .top h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
   .top .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
   .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .controls input[type="date"] { color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; }
+  .period-custom { position: relative; }
+  .period-custom summary { list-style: none; cursor: pointer; color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 7px 10px; font-size: 12.5px; }
+  .period-custom summary::-webkit-details-marker { display: none; }
+  .period-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 8; display: grid; gap: 9px; min-width: 220px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 35px rgba(0,0,0,.4); }
+  .period-popover label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12px; }
+  .sim-btn { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+  .section-nav { position: sticky; top: 0; z-index: 6; display: flex; gap: 6px; overflow-x: auto; margin: 4px -8px 16px; padding: 8px; background: rgba(13,13,13,.94); border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); }
+  .section-nav a { flex: 0 0 auto; color: var(--ink-2); text-decoration: none; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; }
+  .section-nav a:hover, .section-nav a:focus-visible { color: var(--ink); background: var(--surface-2); outline: 2px solid var(--series-1); }
+  .section-nav a.active { color:var(--ink); background:var(--surface-2); box-shadow:inset 0 -2px var(--series-1); }
+  .section-title { margin: 22px 2px 10px; color: var(--ink); font-size: 16px; font-weight: 600; scroll-margin-top: 60px; }
+  .tile .sparkline { display: block; width: min(100%, 150px); height: 26px; margin-top: 5px; overflow: visible; }
+  .tile .sparkline polyline { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .tile .sparkline circle { fill: var(--series-1); }
+  .stock-tile { color: inherit; text-decoration: none; }
+  .stock-tile:hover { border-color: rgba(57,135,229,.6); }
 
   .seg {
     display: inline-flex; background: var(--surface); border: 1px solid var(--border);
@@ -99,6 +116,7 @@
   .tiles { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .tile .label { color: var(--ink-2); font-size: 13px; }
   .tile .value { font-size: 28px; font-weight: 650; margin-top: 8px; letter-spacing: -0.02em; }
+  .currency-symbol { display: inline-block; margin-left: .12em; font-size: .46em; font-weight: 550; vertical-align: .2em; letter-spacing: 0; }
   .tile.hero .value { font-size: clamp(36px, 7vw, 48px); line-height: 1.1; }
   .value.bump { animation: bump 0.55s ease-out; }
   @keyframes bump { from { opacity: 0.4; } to { opacity: 1; } }
@@ -156,10 +174,11 @@
     color: var(--ink-2); background: var(--surface-2);
   }
   .pill i { font-style: normal; font-size: 11px; line-height: 1; }
-  .pill.good i { color: var(--good); }
-  .pill.warn i { color: var(--warn); }
-  .pill.crit i { color: var(--crit); }
-  .pill.neutral i { color: var(--muted); }
+  .pill.good { color: #71d99a; border-color: rgba(113,217,154,.35); background: rgba(113,217,154,.1); }
+  .pill.warn { color: #ffd166; border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.1); }
+  .pill.crit { color: #ff8585; border-color: rgba(255,133,133,.35); background: rgba(255,133,133,.1); }
+  .pill.shipped { color: #78baff; border-color: rgba(120,186,255,.35); background: rgba(120,186,255,.1); }
+  .pill.neutral { color: #c4c3bd; border-color: rgba(196,195,189,.28); background: rgba(196,195,189,.08); }
 
   /* ---------- stock list ---------- */
   .stock { list-style: none; display: flex; flex-direction: column; gap: 14px; }
@@ -170,6 +189,73 @@
   .meter .good { background: var(--good); }
   .meter .warn { background: var(--warn); }
   .meter .crit { background: var(--crit); }
+
+  .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+  .filters input, .filters select { min-width: 0; color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 12.5px; }
+  .filters input[type="search"] { flex: 1 1 150px; }
+  .filters input[type="date"] { width: 145px; }
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); font-size: 12.5px; }
+  .pager button, .mini-btn { color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; cursor: pointer; text-decoration: none; }
+  .pager button:disabled { opacity: .45; cursor: default; }
+  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; scroll-margin-top: 60px; }
+  .heatmap-card { display: flex; flex-direction: column; min-height: 325px; }
+  .heatmap { flex: 1; display: grid; grid-template-columns: 30px repeat(24, minmax(8px, 1fr)); grid-template-rows: 20px repeat(7, minmax(22px, 1fr)); gap: 4px; overflow-x: auto; }
+  .heatmap-hours { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(24, minmax(8px, 1fr)); align-items: end; }
+  .heatmap-hours span { color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .heatmap-legend { display: flex; justify-content: flex-end; align-items: center; gap: 7px; margin: -5px 0 9px; color: var(--muted); font-size: 11px; }
+  .heatmap-legend i { display: inline-block; width: 68px; height: 8px; border-radius: 5px; background: linear-gradient(90deg, rgba(57,135,229,.18), #3987e5); }
+  .heatmap-label { color: var(--muted); font-size: 10px; text-align: center; align-self: center; }
+  .heat-cell { min-width: 9px; height: auto; border-radius: 3px; background: rgba(57,135,229,.18); }
+  .heat-cell:hover { outline: 1px solid var(--ink); }
+  .dialog { width: min(460px, 100%); height: 100vh; max-height: 100vh; overflow: auto; margin: 0 0 0 auto; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 14px 0 0 14px; padding: 20px; }
+  .dialog::backdrop { background: rgba(0,0,0,.72); }
+  .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .dialog dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; color: var(--ink-2); font-size: 13px; margin-bottom: 16px; }
+  .dialog dd { text-align: right; color: var(--ink); }
+  tr.order-link { cursor: pointer; }
+  tr.order-link:hover td { background: rgba(255,255,255,.04); }
+  tr.order-link:focus-visible { outline: 2px solid var(--series-1); outline-offset: -2px; }
+  .forecast-critical { color: var(--crit); }
+  .pareto-card { grid-column: 1 / -1; }
+  .pareto-box { height: 260px; position: relative; margin-bottom: 12px; }
+  .system-strip { display: grid; grid-template-columns: minmax(200px, .7fr) 2fr; align-items: center; gap: 16px; padding: 14px 18px; margin: 4px 0 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); scroll-margin-top: 60px; }
+  .system-strip h2 { font-size: 14px; }
+  .system-strip .stock { flex-direction: row; flex-wrap: wrap; gap: 8px 18px; }
+  .system-strip .stock li { display: flex; gap: 6px; }
+  .class-a { color: #10291a; background: #58d68d; border-color: #58d68d; }
+  .class-b { color: #332100; background: #f5bf45; border-color: #f5bf45; }
+  .class-c { color: #082d39; background: #54c4e5; border-color: #54c4e5; }
+  .pareto-legend { display:flex; flex-wrap:wrap; gap:8px 16px; margin:0 0 10px; color:var(--ink-2); font-size:12px; }
+  .pareto-legend span { display:inline-flex; align-items:center; gap:6px; }
+  .legend-swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .legend-line { width:16px; height:2px; display:inline-block; background:#d1d5db; }
+  .legend-bars { background:#9298a3; }
+  .abc-table th, .abc-table td { padding-left:12px; padding-right:12px; white-space:nowrap; }
+  .abc-table th:first-child, .abc-table td:first-child { padding-left:16px; white-space:normal; }
+  .abc-table td:last-child { padding-left:20px; }
+  .abc-actions { display:flex; justify-content:center; padding-top:10px; }
+  .service-statuses { display:flex; flex-wrap:wrap; gap:18px; }
+  .service-status { display:inline-flex; align-items:center; gap:8px; color:var(--ink-2); font-size:13px; }
+  .service-dot { width:8px; height:8px; border-radius:50%; background:var(--crit); }
+  .service-dot.ok { background:var(--good); box-shadow:0 0 8px rgba(88,214,141,.35); }
+  .system-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .system-history { width:100%; margin-top:8px; }
+  .system-history summary { cursor:pointer; color:var(--ink-2); font-size:12px; }
+  .system-history .stock { margin-top:8px; flex-direction:column; }
+  .low-preview { margin-top:5px; display:grid; gap:2px; color:var(--muted); font-size:10px; line-height:1.25; }
+  .low-preview { font-size:12px; }
+  .low-preview span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #topBox { height:320px; }
+  .system-strip { grid-template-columns:1fr auto; }
+  @media (max-width:700px) { .system-right { align-items:flex-start; } .abc-table th,.abc-table td { padding-left:7px; padding-right:7px; font-size:11px; } }
+  .site-footer { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 2px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
+  .site-footer a { color: var(--ink-2); }
+  #stockSection { scroll-margin-top: 65px; }
+  body.loading .tile .value { opacity: .25; }
+  body.loading .tile .value::after { content: ''; display: inline-block; width: 1.8em; height: .7em; border-radius: 5px; background: linear-gradient(90deg,#242422,#3a3a37,#242422); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  @media (max-width: 700px) { .analytics-grid { grid-template-columns: 1fr; } .heatmap { grid-template-columns: 26px repeat(24, minmax(7px, 1fr)); } .heatmap-hours { grid-template-columns: repeat(24, minmax(7px, 1fr)); } .pareto-card { grid-column: auto; } .system-strip { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { .dialog { width: 100%; border-radius: 0; padding: 16px; } }
 
   /* ---------- error / toast ---------- */
   .error {
@@ -216,56 +302,73 @@
 
   <header class="top">
     <div>
-      <h1>Store Analytics</h1>
-      <p class="sub">Заказы и остатки из OpenCart · <span id="lastSync">загрузка…</span></p>
+      <h1>Аналітика магазину</h1>
+      <p class="sub"><span id="dataSourceLabel">Замовлення та залишки з OpenCart</span> · <span id="lastSync">Завантаження…</span></p>
     </div>
     <div class="controls">
-      <div class="seg" role="group" aria-label="Период">
-        <button type="button" data-days="7" aria-pressed="true">7 дней</button>
-        <button type="button" data-days="30" aria-pressed="false">30 дней</button>
-        <button type="button" data-days="90" aria-pressed="false">90 дней</button>
+      <div class="seg" role="group" aria-label="Період">
+        <button type="button" data-days="7" aria-pressed="true">7 днів</button>
+        <button type="button" data-days="30" aria-pressed="false">30 днів</button>
+        <button type="button" data-days="90" aria-pressed="false">90 днів</button>
       </div>
+      <details class="period-custom" id="customPeriod">
+        <summary>Свій період</summary>
+        <div class="period-popover">
+          <label>Початок <input id="dateFrom" type="date" aria-label="Початок періоду"></label>
+          <label>Кінець <input id="dateTo" type="date" aria-label="Кінець періоду"></label>
+          <button class="btn secondary" id="applyDates" type="button">Застосувати</button>
+        </div>
+      </details>
       <button class="btn" id="syncBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-        <span id="syncLabel">Синхронизировать</span>
+        <span id="syncLabel">Повна синхронізація</span>
       </button>
-      <button class="btn secondary" id="simBtn" type="button" title="Создать тестовый заказ в магазине">
+      <button class="btn sim-btn" id="simBtn" type="button" title="Створити тестове замовлення в магазині">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        <span id="simLabel">Симулировать заказ</span>
+        <span id="simLabel">Створити тестове замовлення</span>
       </button>
-      <span class="live" id="live" title="Живое обновление дашборда">
-        <i aria-hidden="true"></i><span id="liveText">подключение…</span>
+      <span class="live" id="live" title="Оновлення даних наживо">
+        <i aria-hidden="true"></i><span id="liveText">Підключення…</span>
       </span>
     </div>
   </header>
 
+  <nav class="section-nav" aria-label="Розділи дашборду">
+    <a href="#salesSection">Продажі</a><a href="#stockSection">Склад</a>
+    <a href="#analyticsSection">Аналітика</a><a href="#systemSection">Система</a>
+  </nav>
+
   <div class="error" id="error" role="alert">
-    <span id="errorText">Не удалось загрузить данные.</span>
-    <button type="button" id="retryBtn">Повторить</button>
+    <span id="errorText">Не вдалося завантажити дані.</span>
+    <button type="button" id="retryBtn">Повторити</button>
   </div>
 
+  <h2 class="section-title" id="salesSection">Продажі</h2>
   <!-- KPI -->
-  <section class="tiles" aria-label="Ключевые показатели">
+  <section class="tiles" aria-label="Ключові показники">
     <article class="card tile hero">
-      <div class="label">Выручка</div>
+      <div class="label">Виручка</div>
       <div class="value" id="vRevenue">—</div>
       <div class="delta" id="dRevenue"></div>
     </article>
     <article class="card tile">
-      <div class="label">Заказов</div>
+      <div class="label" title="Враховано лише замовлення, що дають виручку. Очікувані замовлення також враховано.">Замовлення (без скасованих)</div>
       <div class="value" id="vOrders">—</div>
       <div class="delta" id="dOrders"></div>
+      <svg class="sparkline" id="sparkOrders" viewBox="0 0 120 26" role="img" aria-label="Динаміка кількості замовлень"></svg>
     </article>
     <article class="card tile">
-      <div class="label">Средний чек</div>
+      <div class="label">Середній чек</div>
       <div class="value" id="vAvg">—</div>
       <div class="delta" id="dAvg"></div>
+      <svg class="sparkline" id="sparkAvg" viewBox="0 0 120 26" role="img" aria-label="Динаміка середнього чека"></svg>
     </article>
-    <article class="card tile">
-      <div class="label">Мало на складе</div>
+    <a class="card tile stock-tile" href="#stockSection" aria-label="Перейти до товарів із низьким залишком">
+      <div class="label">Мало на складі</div>
       <div class="value" id="vLow">—</div>
-      <div class="delta" id="dLow">Остаток 5 шт. и меньше</div>
-    </article>
+      <div class="delta" id="dLow">Залишок 5 шт. або менше</div>
+      <div class="low-preview" id="lowStockPreview" aria-label="Товари з найменшими залишками"></div>
+    </a>
   </section>
 
   <!-- revenue + top -->
@@ -273,21 +376,21 @@
     <article class="card">
       <div class="card-head">
         <div>
-          <h2>Выручка по дням</h2>
-          <div class="hint" id="revHint">за 7 дней</div>
+          <h2>Виручка за днями</h2>
+          <div class="hint" id="revHint">за 7 днів</div>
         </div>
-        <div class="toggle" role="group" aria-label="Вид">
-          <button type="button" id="viewChart" aria-pressed="true">График</button>
-          <button type="button" id="viewTable" aria-pressed="false">Таблица</button>
+        <div class="toggle" role="group" aria-label="Вигляд">
+          <button type="button" id="viewChart" aria-pressed="true">Графік</button>
+          <button type="button" id="viewTable" aria-pressed="false">Таблиця</button>
         </div>
       </div>
       <div class="chart-box" id="revBox">
-        <canvas id="revenueChart" role="img" aria-label="График выручки по дням"></canvas>
-        <div class="empty">За выбранный период заказов нет</div>
+        <canvas id="revenueChart" role="img" aria-label="Графік виручки за днями"></canvas>
+        <div class="empty">За вибраний період замовлень немає</div>
       </div>
       <div class="table-scroll" id="revTable">
         <table>
-          <thead><tr><th>Дата</th><th class="num">Выручка</th></tr></thead>
+          <thead><tr><th>Дата</th><th class="num">Виручка</th></tr></thead>
           <tbody id="revRows"></tbody>
         </table>
       </div>
@@ -296,13 +399,13 @@
     <article class="card">
       <div class="card-head">
         <div>
-          <h2>Топ-5 товаров</h2>
-          <div class="hint">по количеству проданных штук</div>
+          <h2>Топ-5 товарів</h2>
+          <div class="hint">за кількістю проданих одиниць</div>
         </div>
       </div>
       <div class="chart-box" id="topBox">
-        <canvas id="topChart" role="img" aria-label="Топ-5 товаров по продажам"></canvas>
-        <div class="empty">За выбранный период продаж нет</div>
+        <canvas id="topChart" role="img" aria-label="Топ-5 товарів за продажами"></canvas>
+        <div class="empty">За вибраний період продажів немає</div>
       </div>
     </article>
   </section>
@@ -312,42 +415,64 @@
     <article class="card">
       <div class="card-head">
         <div>
-          <h2>Последние заказы</h2>
-          <div class="hint">10 самых свежих</div>
+          <h2>Замовлення</h2>
+          <div class="hint" id="ordersHint">Завантаження списку</div>
         </div>
+        <a class="mini-btn" id="csvBtn" href="/api/export/orders.csv">CSV</a>
+      </div>
+      <div class="filters" aria-label="Фільтри замовлень">
+        <input id="orderSearch" type="search" placeholder="Клієнт або номер" aria-label="Пошук за клієнтом або номером замовлення">
+        <select id="statusFilter" aria-label="Фільтр за статусом"><option value="">Усі статуси</option></select>
+        <select id="orderSort" aria-label="Сортування"><option value="created_at:desc">Спочатку нові</option><option value="created_at:asc">Спочатку давні</option><option value="total:desc">Сума ↓</option><option value="total:asc">Сума ↑</option></select>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>№</th><th>Дата</th><th>Клиент</th><th>Статус</th><th class="num">Сумма</th></tr>
+            <tr><th>№</th><th>Дата</th><th>Клієнт</th><th>Статус</th><th class="num">Сума</th></tr>
           </thead>
-          <tbody id="orderRows">
-            <tr><td colspan="5" style="color:var(--muted)">Загрузка…</td></tr>
-          </tbody>
+          <tbody id="orderRows"><tr><td colspan="5" style="color:var(--muted)">Завантаження…</td></tr></tbody>
         </table>
       </div>
+      <div class="pager"><span id="pageInfo">Сторінка 1</span><div><button id="prevPage" type="button" aria-label="Попередня сторінка">←</button> <button id="nextPage" type="button" aria-label="Наступна сторінка">→</button></div></div>
     </article>
 
     <article class="card">
       <div class="card-head">
         <div>
-          <h2>Остатки</h2>
-          <div class="hint">товары с наименьшим запасом</div>
+          <h2 id="stockSection">Склад</h2>
+          <div class="hint">товари з найменшими залишками</div>
         </div>
       </div>
       <ul class="stock" id="stockList"></ul>
+      <button class="mini-btn stock-toggle" id="stockToggle" type="button" hidden>Показати всі</button>
     </article>
   </section>
+
+  <h2 class="section-title" id="analyticsSection">Аналітика</h2>
+  <section class="analytics-grid" aria-label="Додаткова аналітика">
+    <article class="card heatmap-card"><div class="card-head"><div><h2>Коли оформлюють замовлення</h2><div class="hint">день тижня × година за останні 30 днів</div></div></div><div class="heatmap-legend"><span>менше</span><i aria-hidden="true"></i><span>більше</span></div><div id="heatmap" class="heatmap" role="img" aria-label="Теплова карта замовлень за днями тижня та годинами"></div></article>
+    <article class="card"><div class="card-head"><div><h2>Прогноз залишків</h2><div class="hint">оцінка за продажами за 30 днів</div></div><label class="hint"><input id="criticalOnly" type="checkbox"> лише критичні</label></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th class="num">Залишок</th><th class="num">Вистачить</th></tr></thead><tbody id="forecastRows"></tbody></table></div></article>
+    <article class="card pareto-card"><div class="card-head"><div><h2>Парето й ABC-аналіз</h2><div class="hint">виручка, частка та накопичений внесок товарів</div></div></div><div class="pareto-legend" aria-label="Легенда графіка"><span><i class="legend-swatch legend-bars"></i>Виручка</span><span><i class="legend-line"></i>Накопичена частка</span><span><i class="legend-swatch class-a"></i>Клас A</span><span><i class="legend-swatch class-b"></i>Клас B</span><span><i class="legend-swatch class-c"></i>Клас C</span></div><div class="pareto-box"><canvas id="paretoChart" role="img" aria-label="Графік Парето й ABC-аналізу товарів"></canvas></div><div class="table-wrap"><table class="abc-table"><thead><tr><th>Товар</th><th class="num">Виручка</th><th class="num">Частка</th><th class="num">Накопичено</th><th>Клас</th></tr></thead><tbody id="abcRows"></tbody></table></div><div class="abc-actions"><button class="mini-btn" id="abcToggle" type="button" hidden>Показати всі</button></div></article>
+  </section>
+
+  <h2 class="section-title" id="systemSection">Система</h2>
+  <section class="system-strip" aria-label="Стан системи"><div class="service-statuses"><span class="service-status"><i class="service-dot" id="pgDot"></i>PostgreSQL <span id="pgStatus">Перевірка…</span></span><span class="service-status"><i class="service-dot" id="ocDot"></i>OpenCart <span id="ocStatus">Перевірка…</span></span></div><div class="system-right"><span class="hint" id="systemLastSync">Остання синхронізація: —</span><details class="system-history"><summary>Історія синхронізації</summary><ul id="syncLog" class="stock"></ul></details></div></section>
+  <footer class="site-footer"><span>Демо · версія <span id="appVersion">0.2.0</span></span><a id="githubLink" href="#" rel="noopener" hidden>Код на GitHub</a></footer>
 
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog class="dialog" id="orderDialog" aria-labelledby="detailTitle"><div class="dialog-head"><h2 id="detailTitle">Замовлення</h2><button class="mini-btn" id="closeOrder" type="button">Закрити</button></div><div id="orderDetail">Завантаження…</div></dialog>
 
 <script>
   // ====== настройки ======
-  const CURRENCY = 'USD';          // валюта магазина в OpenCart (USD, UAH, EUR ...)
+  let CURRENCY = 'UAH';
+  let TIMEZONE = 'Europe/Kyiv';
   const LOW_STOCK = 5;             // порог «мало на складе»
   const STOCK_ITEMS = 8;           // сколько товаров показывать в блоке «Остатки»
+  let abcExpanded = false;
+  let stockExpanded = false;
+  let inventoryProducts = [];
 
   // ====== токены цвета (те же, что в CSS) ======
   const css = getComputedStyle(document.documentElement);
@@ -368,42 +493,58 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
-  const money = (n, digits = 0) => new Intl.NumberFormat('ru-RU', {
+  const money = (n, digits = 0) => new Intl.NumberFormat('uk-UA', {
     style: 'currency', currency: CURRENCY, maximumFractionDigits: digits, minimumFractionDigits: digits,
-  }).format(n || 0);
-  const num = n => new Intl.NumberFormat('ru-RU').format(n || 0);
-  const shortDate = iso => new Date(iso + 'T00:00:00Z').toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+  }).format(n || 0).replace(/грн\.?/i, '₴');
+  const moneyHtml = (n, digits = 0) => CURRENCY === 'UAH'
+    ? `${new Intl.NumberFormat('uk-UA', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n || 0)}<span class="currency-symbol">₴</span>`
+    : esc(money(n, digits));
+  const num = n => new Intl.NumberFormat('uk-UA').format(n || 0);
+  const shortDate = iso => new Date(iso + 'T00:00:00Z').toLocaleDateString('uk-UA', { day: '2-digit', month: 'short', timeZone: 'UTC' });
   const trunc = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+  const wrapLabel = (value, limit = 14) => {
+    const lines = [];
+    let line = '';
+    for (const word of String(value).split(/\s+/)) {
+      if (line && `${line} ${word}`.length > limit) { lines.push(line); line = word; }
+      else line = line ? `${line} ${word}` : word;
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
 
   // Плавный пересчёт числа в карточке: без него живое обновление читается как рывок.
   const lastMetrics = { revenue: null, orders: null, avg: null };
 
-  function animateNumber(el, from, to, format) {
+  function animateNumber(el, from, to, format, rich = false) {
     const duration = 550;
     const started = performance.now();
     el.classList.add('bump');
     const tick = now => {
       const progress = Math.min(1, (now - started) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      el.textContent = format(from + (to - from) * eased);
+      if (rich) el.innerHTML = format(from + (to - from) * eased);
+      else el.textContent = format(from + (to - from) * eased);
       if (progress < 1) {
         requestAnimationFrame(tick);
       } else {
-        el.textContent = format(to);
+        if (rich) el.innerHTML = format(to);
+        else el.textContent = format(to);
         el.classList.remove('bump');
       }
     };
     requestAnimationFrame(tick);
   }
 
-  function setMetric(el, key, value, format) {
+  function setMetric(el, key, value, format, rich = false) {
     const from = lastMetrics[key];
     lastMetrics[key] = value;
     if (from === null || from === value || reduceMotion) {
-      el.textContent = format(value);
+      if (rich) el.innerHTML = format(value);
+      else el.textContent = format(value);
       return;
     }
-    animateNumber(el, from, value, format);
+    animateNumber(el, from, value, format, rich);
   }
 
   function parseUtc(s) {
@@ -433,8 +574,13 @@
 
   // ====== состояние ======
   let days = 7;
+  let orderPage = 1;
+  const orderPageSize = 10;
+  let customRange = null;
+  let forecastProducts = [];
   let revenueChart = null;
   let topChart = null;
+  let paretoChart = null;
 
   // ====== плагины Chart.js ======
   // вертикальная линия-перекрестие под курсором
@@ -493,7 +639,7 @@
     const p = pct(cur, prev);
     el.className = 'delta';
     if (p === null) {
-      el.innerHTML = '<span class="tail">нет данных за прошлый период</span>';
+      el.innerHTML = '<span class="tail">немає даних за попередній період</span>';
       return;
     }
     const rounded = Math.round(p * 10) / 10;
@@ -502,13 +648,25 @@
     if (!flat) el.classList.add(good ? 'up' : 'down');
     const arrow = flat ? '■' : (up ? '▲' : '▼');
     const sign = up ? '+' : '';
-    el.innerHTML = `<span aria-hidden="true">${arrow}</span><span>${sign}${rounded.toLocaleString('ru-RU')}%</span><span class="tail">к прошлому периоду</span>`;
+    el.innerHTML = `<span aria-hidden="true">${arrow}</span><span>${sign}${rounded.toLocaleString('uk-UA')}%</span><span class="tail">до попереднього періоду</span>`;
+  }
+
+  function renderSparkline(id, values) {
+    const svg = $(id);
+    const points = (values || []).slice(-14).map(Number).filter(Number.isFinite);
+    if (!points.length) { svg.innerHTML = ''; return; }
+    const min = Math.min(...points), max = Math.max(...points), span = max - min || 1;
+    const coords = points.map((value, i) => `${points.length === 1 ? 0 : (i * 120) / (points.length - 1)},${22 - ((value - min) / span) * 18}`);
+    const last = coords[coords.length - 1].split(',');
+    svg.innerHTML = `<polyline points="${coords.join(' ')}"></polyline><circle cx="${last[0]}" cy="${last[1]}" r="2.5"></circle>`;
   }
 
   function renderTiles(s, products) {
-    setMetric($('vRevenue'), 'revenue', s.total_revenue, v => money(v));
+    setMetric($('vRevenue'), 'revenue', s.total_revenue, v => moneyHtml(v), true);
     setMetric($('vOrders'), 'orders', s.orders_count, v => num(Math.round(v)));
-    setMetric($('vAvg'), 'avg', s.avg_check, v => money(v, 2));
+    setMetric($('vAvg'), 'avg', s.avg_check, v => moneyHtml(v, 2), true);
+    renderSparkline('sparkOrders', Object.keys(s.orders_by_day || {}).sort().map(k => s.orders_by_day[k]));
+    renderSparkline('sparkAvg', Object.keys(s.average_check_by_day || {}).sort().map(k => s.average_check_by_day[k]));
     const prev = s.prev || null;
     if (prev) {
       setDelta($('dRevenue'), s.total_revenue, prev.total_revenue);
@@ -521,18 +679,28 @@
     $('vLow').textContent = (products.length >= 20 && low === products.length) ? low + '+' : num(low);
   }
 
-  function dayKeys(n, data) {
+  function dayKeys(s, data) {
     const keys = new Set(Object.keys(data));
-    for (let i = 0; i < n; i++) {
-      keys.add(new Date(Date.now() - i * 864e5).toISOString().slice(0, 10));
+    const start = Date.parse((s.date_from || '') + 'T00:00:00Z');
+    const stop = Date.parse((s.date_to || '') + 'T00:00:00Z');
+    if (Number.isFinite(start) && Number.isFinite(stop)) {
+      for (let ms = start; ms <= stop; ms += 864e5) keys.add(new Date(ms).toISOString().slice(0, 10));
     }
     return [...keys].sort();
   }
 
+  function todayKey() {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date()).map(part => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+
   function renderRevenue(s) {
-    const keys = dayKeys(days, s.revenue_by_day || {});
+    const keys = dayKeys(s, s.revenue_by_day || {});
     const values = keys.map(k => Math.round((s.revenue_by_day[k] || 0) * 100) / 100);
-    $('revHint').textContent = 'за ' + days + ' ' + (days === 7 ? 'дней' : 'дней');
+    const today = todayKey();
+    $('revHint').textContent = `за ${keys.length} дн.${keys.at(-1) === today ? ' · сьогодні, дані неповні' : ''}`;
 
     // таблица (альтернативный вид — для доступности)
     $('revRows').innerHTML = keys.slice().reverse().map((k, i) => {
@@ -551,7 +719,7 @@
       data: {
         labels: keys,
         datasets: [{
-          label: 'Выручка',
+          label: 'Виручка',
           data: values,
           borderColor: C.series,
           backgroundColor: 'rgba(57,135,229,0.10)',
@@ -559,8 +727,8 @@
           borderJoinStyle: 'round',
           borderCapStyle: 'round',
           fill: true,
-          tension: 0.35,
-          cubicInterpolationMode: 'monotone',
+          tension: 0,
+          segment: { borderDash: ctx => keys[ctx.p1DataIndex] === today ? [5, 4] : undefined },
           pointRadius: 0,
           pointHoverRadius: 5,
           pointHoverBackgroundColor: C.series,
@@ -592,7 +760,7 @@
             ...tooltipBase,
             callbacks: {
               title: items => shortDate(items[0].label),
-              label: item => 'Выручка: ' + money(item.parsed.y),
+              label: item => 'Виручка: ' + money(item.parsed.y),
             },
           },
         },
@@ -613,7 +781,7 @@
       data: {
         labels: items.map(p => p.name),
         datasets: [{
-          label: 'Продано, шт.',
+          label: 'Продано, од.',
           data: items.map(p => p.qty),
           backgroundColor: C.series,
           borderRadius: { topRight: 4, bottomRight: 4, topLeft: 0, bottomLeft: 0 },
@@ -638,7 +806,7 @@
           y: {
             grid: { display: false },
             border: { color: C.axis },
-            ticks: { color: C.ink2, callback(v) { return trunc(this.getLabelForValue(v), 20); } },
+            ticks: { color: C.ink2, callback(v) { return wrapLabel(this.getLabelForValue(v), 14); } },
           },
         },
         plugins: {
@@ -647,7 +815,7 @@
             ...tooltipBase,
             callbacks: {
               title: items => items[0].label,
-              label: item => 'Продано: ' + num(item.parsed.x) + ' шт.',
+              label: item => 'Продано: ' + num(item.parsed.x) + ' од.',
             },
           },
         },
@@ -656,44 +824,171 @@
     });
   }
 
+  function statusLabel(name) {
+    const labels = { complete: 'Завершено', shipped: 'Відправлено', pending: 'Очікує', processing: 'В обробці', processed: 'Опрацьовано', canceled: 'Скасовано', 'canceled reversal': 'Скасування сторновано', chargeback: 'Оскаржено', denied: 'Відхилено', expired: 'Термін минув', failed: 'Не вдалося', refunded: 'Повернено', reversed: 'Сторновано', voided: 'Анульовано' };
+    return labels[String(name || '').toLowerCase()] || name || '—';
+  }
+
   function statusInfo(name) {
     const s = String(name || '').toLowerCase();
-    if (/(complete|deliver|выполн|заверш|достав)/.test(s)) return { cls: 'good', icon: '✓' };
-    if (/(cancel|fail|refund|denied|revers|void|отмен|возврат)/.test(s)) return { cls: 'crit', icon: '✕' };
-    if (/(pending|process|ship|ожид|обраб|отправ)/.test(s)) return { cls: 'warn', icon: '●' };
+    if (/(complete|deliver|викон|заверш|достав)/.test(s)) return { cls: 'good', icon: '✓' };
+    if (/(cancel|fail|refund|denied|revers|void|скас|повернен)/.test(s)) return { cls: 'crit', icon: '✕' };
+    if (/(shipped|відправ|відвантаж)/.test(s)) return { cls: 'shipped', icon: '↗' };
+    if (/(pending|очіку)/.test(s)) return { cls: 'neutral', icon: '●' };
+    if (/(process|оброб)/.test(s)) return { cls: 'warn', icon: '●' };
     return { cls: 'neutral', icon: '○' };
   }
 
   function renderOrders(orders, highlight = []) {
     if (!orders.length) {
-      $('orderRows').innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Заказов пока нет — нажмите «Синхронизировать»</td></tr>';
+      $('orderRows').innerHTML = '<tr><td colspan="5" style="color:var(--muted)">За цими умовами замовлень немає</td></tr>';
       return;
     }
     const fresh = new Set(highlight);
     $('orderRows').innerHTML = orders.map(o => {
       const d = parseUtc(o.created_at);
-      const date = d ? d.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+      const date = d ? d.toLocaleString('uk-UA', { timeZone: TIMEZONE, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
       const st = statusInfo(o.status);
-      return `<tr${fresh.has(o.id) ? ' class="row-new"' : ''}>
+      return `<tr class="order-link${fresh.has(o.id) ? ' row-new' : ''}" data-order-id="${esc(o.id)}" tabindex="0" aria-label="Відкрити замовлення ${esc(o.id)}">
         <td class="strong">#${esc(o.id)}</td>
         <td>${esc(date)}</td>
         <td>${esc(o.customer || '—')}</td>
-        <td><span class="pill ${st.cls}"><i aria-hidden="true">${st.icon}</i>${esc(o.status || '—')}</span></td>
+        <td><span class="pill ${st.cls}"><i aria-hidden="true">${st.icon}</i>${esc(statusLabel(o.status))}</span></td>
         <td class="num strong">${esc(money(o.total, 2))}</td>
       </tr>`;
     }).join('');
   }
 
+  function rangeParams() {
+    const params = new URLSearchParams();
+    if (customRange) {
+      params.set('date_from', customRange.from);
+      params.set('date_to', customRange.to);
+    } else {
+      params.set('days', days);
+    }
+    return params;
+  }
+
+  function orderParams() {
+    const params = new URLSearchParams();
+    params.set('page', orderPage);
+    params.set('page_size', orderPageSize);
+    const search = $('orderSearch').value.trim();
+    const status = $('statusFilter').value;
+    if (search) params.set('q', search);
+    if (status) params.set('status', status);
+    const [sort, direction] = $('orderSort').value.split(':');
+    params.set('sort', sort);
+    params.set('order', direction);
+    if ($('dateFrom').value && $('dateTo').value) {
+      params.set('date_from', $('dateFrom').value);
+      params.set('date_to', $('dateTo').value);
+    }
+    return params;
+  }
+
+  function renderHeatmap(data) {
+    const cells = new Map((data.cells || []).map(c => [`${c.weekday}:${c.hour}`, c.orders]));
+    const max = Math.max(1, ...cells.values());
+    const labels = data.days || ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+    const axis = `<div class="heatmap-hours"><span style="grid-column:1">0</span><span style="grid-column:7">6</span><span style="grid-column:13">12</span><span style="grid-column:19">18</span></div>`;
+    $('heatmap').innerHTML = axis + labels.map((day, weekday) => `<span class="heatmap-label">${day}</span>${Array.from({length:24}, (_, hour) => {
+      const value = cells.get(`${weekday}:${hour}`) || 0;
+      const alpha = value ? 0.28 + 0.72 * value / max : 0.10;
+      const unit = value === 1 ? 'замовлення' : value >= 2 && value <= 4 ? 'замовлення' : 'замовлень';
+      return `<span class="heat-cell" title="${day}, ${String(hour).padStart(2, '0')}:00 — ${value} ${unit}" style="background:rgba(57,135,229,${alpha})"></span>`;
+    }).join('')}`).join('');
+  }
+
+  function renderForecast(rows) {
+    forecastProducts = rows;
+    const visible = $('criticalOnly').checked ? rows.filter(p => p.critical) : rows;
+    $('forecastRows').innerHTML = visible.length ? visible.slice(0, 10).map(p => `<tr><td>${esc(p.name)}</td><td class="num">${num(p.quantity)}</td><td class="num">${p.days_remaining === null ? '—' : `<span class="${p.critical ? 'forecast-critical' : ''}">${num(p.days_remaining)} дн.</span>`}</td></tr>`).join('') : `<tr><td colspan="3">${forecastProducts.length ? 'Критичних позицій немає' : 'Немає даних про товари'}</td></tr>`;
+  }
+
+  function renderStatusOptions(statuses) {
+    const select = $('statusFilter');
+    const selected = select.value;
+    select.innerHTML = '<option value="">Усі статуси</option>' + statuses.map(s => `<option value="${esc(s)}">${esc(statusLabel(s))}</option>`).join('');
+    select.value = statuses.includes(selected) ? selected : '';
+  }
+
+  function renderAbc(rows) {
+    const colors = { A: '#58d68d', B: '#f5bf45', C: '#54c4e5' };
+    abcExpanded = false;
+    $('abcRows').innerHTML = rows.length ? rows.map((p, i) => `<tr${i >= 8 ? ' class="abc-extra" hidden' : ''}><td>${esc(p.name)}</td><td class="num">${esc(money(p.revenue, 2))}</td><td class="num">${num(p.share)}%</td><td class="num">${num(p.cumulative_share)}%</td><td><span class="pill class-${p.class.toLowerCase()}">${p.class}</span></td></tr>`).join('') : '<tr><td colspan="5">За цей період продажів немає</td></tr>';
+    $('abcToggle').hidden = rows.length <= 8;
+    $('abcToggle').textContent = 'Показати всі';
+    if (paretoChart) { paretoChart.destroy(); paretoChart = null; }
+    if (!rows.length) return;
+    paretoChart = new Chart($('paretoChart'), {
+      type: 'bar',
+      data: { labels: rows.map((_, i) => String(i + 1)), datasets: [
+        { type: 'bar', label: 'Виручка', data: rows.map(p => p.revenue), yAxisID: 'y',
+          backgroundColor: rows.map(p => colors[p.class]), borderRadius: 4, maxBarThickness: 28 },
+        { type: 'line', label: 'Накопичена частка', data: rows.map(p => p.cumulative_share), yAxisID: 'y1',
+          borderColor: '#d1d5db', backgroundColor: '#d1d5db', borderWidth: 2, tension: 0,
+          pointRadius: 2, pointHoverRadius: 4 },
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
+        interaction: { mode: 'index', intersect: false },
+        scales: { x: { grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, minRotation: 0, autoSkip: false, callback(v) { return this.getLabelForValue(v); } } },
+          y: { beginAtZero: true, grid: { color: C.grid }, ticks: { color: C.muted, callback: v => money(v) } },
+          y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { color: C.muted, callback: v => `${v}%` } } },
+        plugins: { legend: { display: false }, tooltip: { ...tooltipBase,
+          callbacks: { title: items => items.length ? rows[items[0].dataIndex].name : '', label: item => item.datasetIndex === 0 ? `Виручка: ${money(item.parsed.y, 2)}` : `Накопичено: ${num(item.parsed.y)}%` } } } },
+    });
+  }
+
+  function renderSyncState(health, logs) {
+    $('pgStatus').textContent = health.postgres ? 'підключено' : 'помилка';
+    $('ocStatus').textContent = health.demo_mode ? 'демо-режим' : health.opencart ? 'підключено' : 'помилка';
+    $('pgDot').classList.toggle('ok', !!health.postgres);
+    $('ocDot').classList.toggle('ok', !!health.demo_mode || !!health.opencart);
+    const latest = logs[0];
+    const latestDate = latest && parseUtc(latest.synced_at);
+    $('systemLastSync').textContent = latestDate
+      ? `Останнє оновлення: ${latestDate.toLocaleString('uk-UA', { timeZone: TIMEZONE, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+      : health.demo_mode ? 'Демо-дані' : 'Синхронізацію ще не запускали';
+    $('syncLog').innerHTML = logs.length ? logs.slice(0, 5).map(item => {
+      const d = parseUtc(item.synced_at);
+      const when = d ? d.toLocaleString('uk-UA', { timeZone: TIMEZONE, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+      const count = Number(item.orders_synced || 0);
+      return `<li><span class="name">${esc(when)} · ${item.status === 'ok' ? 'успішно' : 'помилка'}</span><span class="pill ${item.status === 'ok' ? 'good' : 'crit'}">${count ? '+' + num(count) + ' нових' : 'Нових немає'}</span></li>`;
+    }).join('') : '<li style="color:var(--muted)">Синхронізацій ще немає</li>';
+  }
+
+  async function openOrder(id) {
+    const dialog = $('orderDialog');
+    $('detailTitle').textContent = `Замовлення №${id}`;
+    $('orderDetail').textContent = 'Завантаження…';
+    dialog.showModal();
+    try {
+      const order = await getJSON(`/api/orders/${encodeURIComponent(id)}`);
+      const d = parseUtc(order.created_at);
+      const date = d ? d.toLocaleString('uk-UA', { timeZone: TIMEZONE }) : '—';
+      $('orderDetail').innerHTML = `<dl><dt>Клієнт</dt><dd>${esc(order.customer || '—')}</dd><dt>Дата</dt><dd>${esc(date)}</dd><dt>Статус</dt><dd>${esc(statusLabel(order.status || '—'))}</dd><dt>Разом</dt><dd>${esc(money(order.total, 2))}</dd></dl><div class="table-wrap"><table><thead><tr><th>Позиція</th><th class="num">Кількість</th><th class="num">Сума</th></tr></thead><tbody>${order.items.map(i => `<tr><td>${esc(i.name)}</td><td class="num">${num(i.quantity)}</td><td class="num">${esc(money(i.total, 2))}</td></tr>`).join('')}</tbody></table></div>`;
+    } catch (e) {
+      $('orderDetail').textContent = 'Не вдалося завантажити замовлення.';
+    }
+  }
+
   function stockState(q) {
-    if (q <= 0) return { cls: 'crit', icon: '✕', label: 'Нет в наличии' };
+    if (q <= 0) return { cls: 'crit', icon: '✕', label: 'Немає в наявності' };
     if (q <= LOW_STOCK) return { cls: 'warn', icon: '●', label: 'Мало' };
-    return { cls: 'good', icon: '✓', label: 'В наличии' };
+    return { cls: 'good', icon: '✓', label: 'У наявності' };
   }
 
   function renderStock(products) {
-    const list = products.slice(0, STOCK_ITEMS);
+    inventoryProducts = products;
+    const lowItems = [...products].filter(p => Number(p.quantity) <= LOW_STOCK).sort((a, b) => Number(a.quantity) - Number(b.quantity)).slice(0, 3);
+    $('lowStockPreview').innerHTML = lowItems.map(p => `<span title="${esc(p.name)} · ${num(p.quantity)} шт.">${esc(trunc(p.name, 20))} · ${num(p.quantity)}</span>`).join('');
+    $('stockToggle').hidden = products.length <= STOCK_ITEMS;
+    $('stockToggle').textContent = stockExpanded ? 'Згорнути список' : 'Показати всі';
+    const list = stockExpanded ? products : products.slice(0, STOCK_ITEMS);
     if (!list.length) {
-      $('stockList').innerHTML = '<li style="color:var(--muted);font-size:13.5px">Товаров пока нет</li>';
+      $('stockList').innerHTML = '<li style="color:var(--muted);font-size:13.5px">Товарів ще немає</li>';
       return;
     }
     const scale = Math.max(20, ...list.map(p => p.quantity));
@@ -711,8 +1006,8 @@
   function renderLastSync(s) {
     const d = parseUtc(s.last_sync);
     $('lastSync').textContent = d
-      ? 'обновлено ' + d.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-      : 'синхронизация ещё не запускалась';
+      ? 'оновлено ' + d.toLocaleString('uk-UA', { timeZone: TIMEZONE, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : 'синхронізацію ще не запускали';
   }
 
   // ====== загрузка ======
@@ -720,20 +1015,38 @@
     document.body.classList.add('loading');
     $('error').classList.remove('show');
     try {
-      const [stats, products, orders] = await Promise.all([
-        getJSON('/api/stats?days=' + days),
+      const range = rangeParams();
+      const ordersQuery = orderParams();
+      const [stats, products, orderPageData, statuses, heatmap, forecast, abc, health, syncLog] = await Promise.all([
+        getJSON('/api/stats?' + range),
         getJSON('/api/products'),
-        getJSON('/api/orders?limit=10'),
+        getJSON('/api/orders?' + ordersQuery),
+        getJSON('/api/order-statuses'),
+        getJSON('/api/stats/heatmap?days=30'),
+        getJSON('/api/forecast'),
+        getJSON('/api/analytics/abc?' + range),
+        getJSON('/health'),
+        getJSON('/api/sync/log'),
       ]);
       renderTiles(stats, products);
       renderRevenue(stats);
       renderTop(stats);
-      renderOrders(orders, highlight);
+      renderOrders(orderPageData.items, highlight);
+      renderStatusOptions(statuses);
+      $('ordersHint').textContent = `Знайдено: ${num(orderPageData.total)}`;
+      $('pageInfo').textContent = `Сторінка ${orderPageData.page} · усього ${num(orderPageData.total)}`;
+      $('prevPage').disabled = orderPageData.page <= 1;
+      $('nextPage').disabled = orderPageData.page * orderPageData.page_size >= orderPageData.total;
+      renderHeatmap(heatmap);
+      renderForecast(forecast);
+      renderAbc(abc);
+      renderSyncState(health, syncLog);
+      $('csvBtn').href = '/api/export/orders.csv?' + orderParams().toString();
       renderStock(products);
       renderLastSync(stats);
     } catch (e) {
       console.error(e);
-      $('errorText').textContent = 'Не удалось загрузить данные. Проверьте, что API запущен.';
+      $('errorText').textContent = 'Не вдалося завантажити дані. Перевірте, чи запущено API.';
       $('error').classList.add('show');
     } finally {
       document.body.classList.remove('loading');
@@ -742,21 +1055,38 @@
 
   async function runSync() {
     const btn = $('syncBtn');
+    let actionToken = sessionStorage.getItem('dashboardActionToken');
+    if (!actionToken) {
+      actionToken = prompt('Токен для повної синхронізації:');
+      if (!actionToken) return;
+    }
     btn.disabled = true;
     btn.classList.add('spin');
-    $('syncLabel').textContent = 'Синхронизация…';
+    $('syncLabel').textContent = 'Синхронізація…';
     try {
-      const res = await fetch('/api/sync', { method: 'POST' });
+      const res = await fetch('/api/sync', {
+        method: 'POST', headers: { 'X-Action-Token': actionToken }
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem('dashboardActionToken');
+        throw new Error('invalid action token');
+      }
+      if (res.status === 503) throw new Error('action token is not configured');
       if (!res.ok) throw new Error('sync ' + res.status);
+      sessionStorage.setItem('dashboardActionToken', actionToken);
       await loadAll();
-      toast('Данные обновлены');
+      toast('Дані оновлено');
     } catch (e) {
       console.error(e);
-      toast('Синхронизация не удалась');
+      toast(e.message.includes('not configured')
+        ? 'Токен синхронізації не налаштований на сервері'
+        : e.message.includes('invalid action token')
+          ? 'Невірний токен синхронізації'
+          : 'Не вдалося синхронізувати');
     } finally {
       btn.disabled = false;
       btn.classList.remove('spin');
-      $('syncLabel').textContent = 'Синхронизировать';
+      $('syncLabel').textContent = 'Повна синхронізація';
     }
   }
 
@@ -764,10 +1094,59 @@
   document.querySelectorAll('.seg button').forEach(b => {
     b.addEventListener('click', () => {
       days = Number(b.dataset.days);
+      customRange = null;
+      $('dateFrom').value = '';
+      $('dateTo').value = '';
       document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       loadAll();
     });
   });
+
+  $('applyDates').addEventListener('click', () => {
+    const from = $('dateFrom').value, to = $('dateTo').value;
+    if (!from || !to || to < from) {
+      toast('Вкажіть коректні дати початку й завершення');
+      return;
+    }
+    customRange = { from, to };
+    days = Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1);
+    orderPage = 1;
+    $('customPeriod').open = false;
+    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    loadAll();
+  });
+
+  let searchTimer;
+  $('orderSearch').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { orderPage = 1; loadAll(); }, 250);
+  });
+  ['statusFilter', 'orderSort'].forEach(id => $(id).addEventListener('change', () => {
+    orderPage = 1;
+    loadAll();
+  }));
+  $('prevPage').addEventListener('click', () => { orderPage = Math.max(1, orderPage - 1); loadAll(); });
+  $('nextPage').addEventListener('click', () => { orderPage += 1; loadAll(); });
+  $('criticalOnly').addEventListener('change', () => renderForecast(forecastProducts));
+  $('abcToggle').addEventListener('click', () => {
+    abcExpanded = !abcExpanded;
+    document.querySelectorAll('.abc-extra').forEach(row => { row.hidden = !abcExpanded; });
+    $('abcToggle').textContent = abcExpanded ? 'Згорнути список' : 'Показати всі';
+  });
+  $('stockToggle').addEventListener('click', () => {
+    stockExpanded = !stockExpanded;
+    renderStock(inventoryProducts);
+  });
+  $('orderRows').addEventListener('click', event => {
+    const row = event.target.closest('tr[data-order-id]');
+    if (row) openOrder(row.dataset.orderId);
+  });
+  $('orderRows').addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const row = event.target.closest('tr[data-order-id]');
+    if (row) { event.preventDefault(); openOrder(row.dataset.orderId); }
+  });
+  $('closeOrder').addEventListener('click', () => $('orderDialog').close());
 
   function setView(table) {
     $('viewChart').setAttribute('aria-pressed', String(!table));
@@ -789,17 +1168,17 @@
     if (!fresh.length) return;
     const latest = fresh[fresh.length - 1];
     const more = fresh.length > 1 ? ` (+${fresh.length - 1})` : '';
-    toast(`Новый заказ #${latest.id} на ${money(latest.total, 2)}${more}`, ORDER_TOAST_MS);
+    toast(`Нове замовлення №${latest.id} на ${money(latest.total, 2)}${more}`, ORDER_TOAST_MS);
     loadAll(fresh.map(o => o.id));
   }
 
   function connectStream() {
     if (!('EventSource' in window)) {
-      setLive('warn', 'без live-обновлений');
+      setLive('warn', 'без оновлень наживо');
       return;
     }
     const stream = new EventSource('/api/events');
-    stream.addEventListener('hello', () => setLive('', 'в эфире'));
+    stream.addEventListener('hello', () => setLive('', 'на зв’язку'));
     stream.addEventListener('orders', event => {
       try {
         handleLiveOrders(JSON.parse(event.data));
@@ -807,27 +1186,30 @@
         console.error(e);
       }
     });
-    stream.addEventListener('error', () => setLive('warn', 'переподключение…'));
+    stream.addEventListener('error', () => setLive('warn', 'повторне підключення…'));
   }
 
   async function simulateOrder() {
     const btn = $('simBtn');
     btn.disabled = true;
     btn.classList.add('spin');
-    $('simLabel').textContent = 'Создаём заказ…';
+    $('simLabel').textContent = 'Створюємо замовлення…';
     try {
       const res = await fetch('/api/simulate', { method: 'POST' });
+      if (res.status === 429) throw new Error('simulate rate limit');
       if (!res.ok) throw new Error('simulate ' + res.status);
       const data = await res.json();
       // Если поток событий недоступен, обновляем дашборд вручную.
       if (!data.new_orders) await loadAll();
     } catch (e) {
       console.error(e);
-      toast('Не удалось создать демо-заказ');
+      toast(e.message.includes('rate limit')
+        ? 'Ліміт симуляцій вичерпано. Спробуйте пізніше.'
+        : 'Не вдалося створити тестове замовлення');
     } finally {
       btn.disabled = false;
       btn.classList.remove('spin');
-      $('simLabel').textContent = 'Симулировать заказ';
+      $('simLabel').textContent = 'Створити тестове замовлення';
     }
   }
 
@@ -835,8 +1217,48 @@
   $('simBtn').addEventListener('click', simulateOrder);
   $('retryBtn').addEventListener('click', loadAll);
 
-  loadAll();
-  connectStream();
+  function setupSectionNavigation() {
+    if (!('IntersectionObserver' in window)) return;
+    const links = [...document.querySelectorAll('.section-nav a')];
+    const observer = new IntersectionObserver(entries => {
+      const active = entries.filter(entry => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!active) return;
+      for (const link of links) {
+        const selected = link.hash === `#${active.target.id}`;
+        link.classList.toggle('active', selected);
+        if (selected) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      }
+    }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+    for (const link of links) {
+      const section = document.querySelector(link.hash);
+      if (section) observer.observe(section);
+    }
+  }
+  setupSectionNavigation();
+
+  async function initialize() {
+    try {
+      const config = await getJSON('/api/config');
+      if (config.currency) CURRENCY = config.currency;
+      if (config.timezone) TIMEZONE = config.timezone;
+      if (config.app_version) $('appVersion').textContent = config.app_version;
+      if (config.demo_mode) {
+        $('syncBtn').hidden = true;
+        $('dataSourceLabel').textContent = 'Демо-магазин · тестові дані';
+      }
+      if (config.github_url && /^https:\/\/github\.com\//i.test(config.github_url)) {
+        $('githubLink').href = config.github_url;
+        $('githubLink').hidden = false;
+      }
+    } catch (e) {
+      console.error('Не вдалося завантажити конфігурацію', e);
+    }
+    await loadAll();
+    connectStream();
+  }
+  initialize();
 </script>
 </body>
 </html>

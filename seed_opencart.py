@@ -1,17 +1,23 @@
 """Наполняет тестовый OpenCart товарами и заказами за 90 дней.
 Запуск (OpenCart уже установлен через веб-установщик, контейнеры подняты):
-    pip install pymysql
+    pip install -r requirements-seed.txt
     python seed_opencart.py            # хост 127.0.0.1:3306
-Повторный запуск безопасен: старые демо-данные (model SEED-*, email seed@demo.local) пересоздаются.
+Повторный запуск сбрасывает демо-заказы и каталог в тестовой базе, затем создаёт единый seed-набор.
+Не запускай этот скрипт на боевой базе магазина.
 Обязательные колонки без дефолта подставляются автоматически по information_schema,
 поэтому скрипт работает на разных версиях OpenCart (3.x / 4.x)."""
 import os, random, sys
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import pymysql
 
 HOST = os.getenv("OC_HOST", "127.0.0.1"); PORT = int(os.getenv("OC_PORT", "3306"))
 USER = os.getenv("OC_USER", "opencart"); PWD = os.getenv("OC_PASS", "opencart_pass")
 DB = os.getenv("OC_DB", "opencart"); P = os.getenv("OC_PREFIX", "oc_")
+try:
+    TZ = ZoneInfo(os.getenv("TIMEZONE", "Europe/Kyiv"))
+except ZoneInfoNotFoundError:
+    sys.exit("Не найдена база часовых поясов. Выполни: pip install -r requirements-seed.txt")
 random.seed(42)
 
 con = pymysql.connect(host=HOST, port=PORT, user=USER, password=PWD, database=DB,
@@ -48,7 +54,7 @@ def insert(table, cols, vals, now):
                 [v[k] for k in keys])
     return cur.lastrowid
 
-now = datetime.now().replace(microsecond=0)
+now = datetime.now(TZ).replace(tzinfo=None, microsecond=0)
 S = {t: schema(t) for t in ("product", "product_description", "order", "order_product")}
 
 # --- статусы
@@ -58,26 +64,38 @@ if not st: sys.exit("Нет статусов заказов (language_id=1)")
 def sid(name): return st.get(name) or next(iter(st.values()))
 STATUSES = [("Complete", 62), ("Shipped", 12), ("Processing", 10), ("Pending", 10), ("Canceled", 6)]
 
-# --- чистим прошлый seed
-cur.execute(f"SELECT order_id FROM `{P}order` WHERE email='seed@demo.local'")
-ids = [r["order_id"] for r in cur.fetchall()]
-for i in ids:
-    cur.execute(f"DELETE FROM `{P}order_product` WHERE order_id=%s", (i,))
-    cur.execute(f"DELETE FROM `{P}order` WHERE order_id=%s", (i,))
-cur.execute(f"SELECT product_id FROM `{P}product` WHERE model LIKE 'SEED-%%'")
-for r in cur.fetchall():
-    for t in ("product_description", "product_to_store", "product"):
-        try: cur.execute(f"DELETE FROM `{P}{t}` WHERE product_id=%s", (r["product_id"],))
-        except Exception: pass
+# --- очищаем тестовые заказы вместе с деталями, затем весь стартовый каталог
+demo_emails = ("seed@demo.local", "simulate@demo.local")
+cur.execute(f"SELECT order_id FROM `{P}order` WHERE email IN (%s, %s)", demo_emails)
+order_ids = [r["order_id"] for r in cur.fetchall()]
+if order_ids:
+    marks = ",".join(["%s"] * len(order_ids))
+    cur.execute("""SELECT DISTINCT TABLE_NAME AS name FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME LIKE %s AND COLUMN_NAME='order_id'
+                     AND TABLE_NAME<>%s""", (DB, P + "%", P + "order"))
+    for row in cur.fetchall():
+        cur.execute(f"DELETE FROM `{row['name']}` WHERE order_id IN ({marks})", order_ids)
+    cur.execute(f"DELETE FROM `{P}order` WHERE order_id IN ({marks})", order_ids)
+
+cur.execute(f"SELECT product_id FROM `{P}product`")
+product_ids = [r["product_id"] for r in cur.fetchall()]
+if product_ids:
+    marks = ",".join(["%s"] * len(product_ids))
+    cur.execute("""SELECT DISTINCT TABLE_NAME AS name FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME LIKE %s AND COLUMN_NAME='product_id'
+                     AND TABLE_NAME<>%s""", (DB, P + "%", P + "product"))
+    for row in cur.fetchall():
+        cur.execute(f"DELETE FROM `{row['name']}` WHERE product_id IN ({marks})", product_ids)
+    cur.execute(f"DELETE FROM `{P}product` WHERE product_id IN ({marks})", product_ids)
 
 # --- товары: (название, цена, остаток, вес популярности)
 PRODUCTS = [
-    ("Беспроводные наушники AirBeat", 89, 34, 10), ("Смарт-часы FitPro 5", 149, 3, 9),
-    ("Портативная колонка BoomMini", 59, 21, 8), ("Powerbank 20000 mAh", 39, 4, 8),
-    ("Игровая мышь Razor X", 45, 18, 6), ("Механическая клавиатура K87", 99, 2, 5),
-    ("Веб-камера 1080p", 49, 27, 4), ("Монитор 27\" IPS", 259, 7, 3),
-    ("USB-C хаб 7-в-1", 35, 40, 6), ("Рюкзак для ноутбука", 55, 15, 4),
-    ("Зарядка GaN 65W", 29, 5, 7), ("Светодиодная лента RGB", 19, 0, 3),
+    ("Бездротові навушники AirBeat", 1899, 34, 10), ("Смарт-годинник FitPro 5", 3299, 3, 9),
+    ("Портативна колонка BoomMini", 1299, 21, 8), ("Павербанк 20 000 мА·год", 999, 4, 8),
+    ("Ігрова миша Razor X", 1599, 18, 6), ("Механічна клавіатура K87", 2499, 2, 5),
+    ("Вебкамера 1080p", 1799, 27, 4), ("Монітор 27\" IPS", 8999, 7, 3),
+    ("USB-C хаб 7-в-1", 1199, 40, 6), ("Рюкзак для ноутбука", 1899, 15, 4),
+    ("Зарядний пристрій GaN 65 Вт", 1099, 5, 7), ("Світлодіодна стрічка RGB", 599, 0, 3),
 ]
 pid = {}
 for name, price, qty, _ in PRODUCTS:
@@ -116,7 +134,7 @@ for d in range(DAYS, -1, -1):
         oid = insert("order", S["order"], dict(
             store_id=0, store_name="Your Store", firstname=random.choice(FIRST), lastname=random.choice(LAST),
             email="seed@demo.local", telephone="+380000000000", order_status_id=sid(status), language_id=1,
-            currency_code="USD", currency_value=1, total=total, date_added=when, date_modified=when), now)
+            currency_code="UAH", currency_value=1, total=total, date_added=when, date_modified=when), now)
         for n, q in lines:
             insert("order_product", S["order_product"], dict(order_id=oid, product_id=pid[n], name=n,
                    model="SEED", quantity=q, price=price_of[n], total=price_of[n] * q), now)
