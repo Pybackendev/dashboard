@@ -1,6 +1,30 @@
 # Дашборд интернет-магазина
 
+> **Демо:** https://dashboard-frontend-opal-two.vercel.app/
+> Бесплатный сервер засыпает после простоя, поэтому первый заход может занять до минуты: страница сама покажет уведомление и подгрузит данные.
+
 OpenCart (MariaDB) → синхронизация → PostgreSQL → FastAPI → дашборд на Chart.js (тёмная тема, без React).
+
+## Архитектура
+```mermaid
+flowchart LR
+    OC[(OpenCart / MariaDB)] -->|инкрементальная и полная синхронизация| SYNC[sync.py]
+    SYNC --> PG[(PostgreSQL)]
+    PG --> API[FastAPI]
+    API -->|REST + SSE| UI[Дашборд: Chart.js]
+    API --> BOT[Telegram-бот]
+    SYNC -.->|новые заказы, низкие остатки| BOT
+```
+
+## Стек и решения
+- **FastAPI + SQLAlchemy 2 + Alembic**: типизированный API, миграции применяются при старте.
+- **PostgreSQL**: время хранится как `timestamptz` (UTC), деньги как `Numeric(12,2)`, календарные дни считаются по `Europe/Kyiv`, включая переходы на летнее время.
+- **Инкрементальная синхронизация** по `date_modified` плюс ежедневная полная сверка: удалённые заказы помечаются, а не теряются.
+- **Выручка** без отменённых и неуспешных статусов; Pending учитывается.
+- **Реальное время**: SSE (`/api/events`) вместо опроса.
+- **Безопасность**: экспорт CSV защищён от formula injection, диапазон дат ограничен 366 днями, действия демо защищены токеном и rate limit.
+- **Chart.js** лежит локально, без CDN и сборки фронтенда.
+- **Деплой**: Docker Compose, Render + Vercel + Neon для публичного демо, GitHub Actions с реальным PostgreSQL.
 
 ## Что показывает
 Выручка, заказы и средний чек с дельтой к прошлому периоду (7/30/90 дней), график выручки, топ-5 товаров,
@@ -73,8 +97,16 @@ docker compose up -d opencart-db opencart
 Проверь фактический адрес/CIDR прокси на VPS перед запуском публичного compose.
 
 ## Проверки и CI
-GitHub Actions запускает unit-тесты защиты и собирает Docker-образ при push и pull request.
-Локально: `python -m pip install -r app/requirements-dev.txt`, затем `cd app` и `python -m pytest -q`.
+GitHub Actions поднимает PostgreSQL 16, запускает тесты (синхронизация, выручка без отменённых заказов,
+границы дней по Киеву, пагинация, CSV, защита демо) и собирает Docker-образ.
+Локально: `python -m pip install -r app/requirements-dev.txt`, создай тестовую базу
+(`docker compose exec postgres createdb -U dashboard dashboard_test`), затем из папки проекта выполни:
+```
+cd app
+python -m pytest -q
+``` Тесты с базой пропускаются, если `dashboard_test` недоступна
+(имя базы для тестов обязано заканчиваться на `_test`, тесты очищают её таблицы).
+Адрес можно задать через `TEST_DATABASE_URL`.
 
 ## Облачное демо для портфолио (Render + Vercel + Neon)
 

@@ -54,6 +54,17 @@ def get_config():
             "demo_mode": settings.demo_mode}
 
 
+MAX_RANGE_DAYS = 366
+CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value) -> str:
+    """Excel и Google Sheets исполняют ячейки, начинающиеся с = + - @ как формулы.
+    Имя клиента приходит из магазина и может быть чужим вводом, поэтому такие значения экранируем."""
+    text = "" if value is None else str(value)
+    return "'" + text if text.startswith(CSV_FORMULA_PREFIXES) else text
+
+
 def _date_window(days: int, date_from: date | None = None, date_to: date | None = None):
     if (date_from is None) != (date_to is None):
         raise HTTPException(status_code=422, detail="date_from и date_to нужно передавать вместе")
@@ -61,6 +72,9 @@ def _date_window(days: int, date_from: date | None = None, date_to: date | None 
     if date_from is not None and date_to is not None:
         if date_to < date_from:
             raise HTTPException(status_code=422, detail="date_to не может быть раньше date_from")
+        if (date_to - date_from).days + 1 > MAX_RANGE_DAYS:
+            raise HTTPException(status_code=422,
+                                detail=f"Период не должен превышать {MAX_RANGE_DAYS} дней")
         start_day, end_day = date_from, date_to + timedelta(days=1)
     else:
         today = datetime.now(zone).date()
@@ -324,8 +338,9 @@ def export_orders(status: str | None = None, q: str | None = None,
         writer = csv.writer(output)
         writer.writerow(["Номер", "Дата", "Клиент", "Статус", "Сумма", "Валюта"])
         for item in rows:
-            writer.writerow([item.opencart_id, item.created_at.isoformat(), item.customer_name,
-                             item.status, f"{item.total:.2f}", settings.currency])
+            writer.writerow([item.opencart_id, item.created_at.isoformat(),
+                             _csv_safe(item.customer_name), _csv_safe(item.status),
+                             f"{item.total:.2f}", settings.currency])
         return Response("\ufeff" + output.getvalue(), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": "attachment; filename=orders.csv"})
 

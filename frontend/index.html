@@ -264,6 +264,12 @@
     color: var(--ink); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; font-size: 13.5px;
   }
   .error.show { display: flex; }
+  .wake {
+    display: none; align-items: center; gap: 12px;
+    background: rgba(57, 135, 229, 0.10); border: 1px solid rgba(57, 135, 229, 0.40);
+    color: var(--ink); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; font-size: 13.5px;
+  }
+  .wake.show { display: flex; }
   .error button {
     appearance: none; font: inherit; font-size: 13px; color: var(--ink); background: transparent;
     border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; cursor: pointer;
@@ -337,6 +343,10 @@
     <a href="#salesSection">Продажі</a><a href="#stockSection">Склад</a>
     <a href="#analyticsSection">Аналітика</a><a href="#systemSection">Система</a>
   </nav>
+
+  <div class="wake" id="wake" role="status">
+    <span>Безкоштовний сервер прокидається після простою, це займає до хвилини. Дані з'являться автоматично.</span>
+  </div>
 
   <div class="error" id="error" role="alert">
     <span id="errorText">Не вдалося завантажити дані.</span>
@@ -570,6 +580,31 @@
     const res = await fetch(url);
     if (!res.ok) throw new Error(url + ' → ' + res.status);
     return res.json();
+  }
+
+  // ====== пробудження сервера ======
+  // Безкоштовний хостинг засинає без трафіку: перший запит може чекати до хвилини.
+  // Перед завантаженням даних чекаємо відповідь /health і показуємо пояснення замість порожньої сторінки.
+  const WAKE_MAX_ATTEMPTS = 12;
+  const WAKE_RETRY_MS = 3000;
+  const WAKE_REQUEST_TIMEOUT_MS = 15000;
+  const WAKE_BANNER_DELAY_MS = 1500;
+  let serverAwake = false;
+  async function waitForServer() {
+    if (serverAwake) return;
+    const started = Date.now();
+    for (let attempt = 0; attempt < WAKE_MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), WAKE_REQUEST_TIMEOUT_MS);
+      try {
+        const res = await fetch('/health', { cache: 'no-store', signal: controller.signal });
+        if (res.ok) { serverAwake = true; break; }
+      } catch (_) { /* сервер ще прокидається */ }
+      finally { clearTimeout(timer); }
+      if (Date.now() - started > WAKE_BANNER_DELAY_MS) $('wake').classList.add('show');
+      await new Promise(resolve => setTimeout(resolve, WAKE_RETRY_MS));
+    }
+    $('wake').classList.remove('show');
   }
 
   // ====== состояние ======
@@ -1015,6 +1050,7 @@
     document.body.classList.add('loading');
     $('error').classList.remove('show');
     try {
+      await waitForServer();
       const range = rangeParams();
       const ordersQuery = orderParams();
       const [stats, products, orderPageData, statuses, heatmap, forecast, abc, health, syncLog] = await Promise.all([
@@ -1046,6 +1082,7 @@
       renderLastSync(stats);
     } catch (e) {
       console.error(e);
+      serverAwake = false; // наступна спроба знову дочекається сервера
       $('errorText').textContent = 'Не вдалося завантажити дані. Перевірте, чи запущено API.';
       $('error').classList.add('show');
     } finally {
@@ -1239,6 +1276,7 @@
   setupSectionNavigation();
 
   async function initialize() {
+    await waitForServer(); // інакше конфіг (валюта, демо-режим) втрачається, якщо сервер спить
     try {
       const config = await getJSON('/api/config');
       if (config.currency) CURRENCY = config.currency;
