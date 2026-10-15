@@ -3,6 +3,19 @@
 > **Демо:** https://dashboard-frontend-opal-two.vercel.app/
 > Бесплатный сервер засыпает после простоя, поэтому первый заход может занять до минуты: страница сама покажет уведомление и подгрузит данные.
 
+![Превью дашборда](docs/freelancehunt-preview.png)
+
+<details>
+<summary>Скриншоты продаж и аналитики</summary>
+
+![Продажи и склад](docs/dashboard-sales.png)
+
+![Тепловая карта и прогноз остатков](docs/dashboard-analytics.png)
+
+![ABC-анализ и система](docs/dashboard-pareto.png)
+
+</details>
+
 OpenCart (MariaDB) → синхронизация → PostgreSQL → FastAPI → дашборд на Chart.js (тёмная тема, без React).
 
 ## Архитектура
