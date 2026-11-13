@@ -1,33 +1,60 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uk">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light dark">
+<script>
+  // Apply the preference before paint, including when browser storage is unavailable.
+  let savedTheme = null;
+  try { savedTheme = localStorage.getItem('dashboardTheme'); } catch (_) {}
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+  document.documentElement.dataset.theme = ['light', 'dark'].includes(savedTheme)
+    ? savedTheme : systemTheme.matches ? 'dark' : 'light';
+</script>
 <title>Аналітика магазину</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a1a19'/%3E%3Cpath d='M7 22l6-7 4 4 8-10' fill='none' stroke='%233987e5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="/static/vendor/chart.umd.min.js"></script>
 <style>
   :root {
+    color-scheme: light;
+    --page: #f1f4f8;
+    --surface: #ffffff;
+    --surface-2: #eaf0f7;
+    --ink: #15273d;
+    --ink-2: #43546b;
+    --muted: #5f7086;
+    --grid: #e4eaf2;
+    --axis: #d3ddea;
+    --border: #dce4ee;
+    --series-1: #2563cf;
+    --good: #13784e;
+    --warn: #946000;
+    --crit: #ba3547;
+    --radius: 16px;
+    --shadow: 0 3px 14px rgba(24, 49, 82, .035);
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  :root[data-theme="dark"] {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #232321;
-    --ink: #ffffff;
-    --ink-2: #c3c2b7;
-    --muted: #a5a49d;
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --border: rgba(255, 255, 255, 0.10);
-    --series-1: #3987e5;
-    --good: #0ca30c;
-    --warn: #fab219;
-    --crit: #d03b3b;
-    --radius: 14px;
-    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --page: #0e1520;
+    --surface: #172130;
+    --surface-2: #202e41;
+    --ink: #eef3fc;
+    --ink-2: #bdcbe0;
+    --muted: #98abc5;
+    --grid: #28364a;
+    --axis: #384961;
+    --border: #2a394e;
+    --series-1: #76a9ff;
+    --good: #6cdaa9;
+    --warn: #ebc270;
+    --crit: #ff93a0;
+    --shadow: 0 3px 14px rgba(0, 0, 0, .12);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  [hidden] { display: none !important; }
 
   body {
     font-family: var(--font);
@@ -54,7 +81,7 @@
   .period-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 8; display: grid; gap: 9px; min-width: 220px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 35px rgba(0,0,0,.4); }
   .period-popover label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12px; }
   .sim-btn { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
-  .section-nav { position: sticky; top: 0; z-index: 6; display: flex; gap: 6px; overflow-x: auto; margin: 4px -8px 16px; padding: 8px; background: rgba(13,13,13,.94); border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); }
+  .section-nav { position: sticky; top: 0; z-index: 6; display: flex; gap: 6px; overflow-x: auto; margin: 4px -8px 16px; padding: 8px; background: var(--page); border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); }
   .section-nav a { flex: 0 0 auto; color: var(--ink-2); text-decoration: none; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; }
   .section-nav a:hover, .section-nav a:focus-visible { color: var(--ink); background: var(--surface-2); outline: 2px solid var(--series-1); }
   .section-nav a.active { color:var(--ink); background:var(--surface-2); box-shadow:inset 0 -2px var(--series-1); }
@@ -174,11 +201,11 @@
     color: var(--ink-2); background: var(--surface-2);
   }
   .pill i { font-style: normal; font-size: 11px; line-height: 1; }
-  .pill.good { color: #71d99a; border-color: rgba(113,217,154,.35); background: rgba(113,217,154,.1); }
-  .pill.warn { color: #ffd166; border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.1); }
-  .pill.crit { color: #ff8585; border-color: rgba(255,133,133,.35); background: rgba(255,133,133,.1); }
-  .pill.shipped { color: #78baff; border-color: rgba(120,186,255,.35); background: rgba(120,186,255,.1); }
-  .pill.neutral { color: #c4c3bd; border-color: rgba(196,195,189,.28); background: rgba(196,195,189,.08); }
+  .pill.good { color: var(--good); border-color: rgba(113,217,154,.35); background: rgba(113,217,154,.1); }
+  .pill.warn { color: var(--warn); border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.1); }
+  .pill.crit { color: var(--crit); border-color: rgba(255,133,133,.35); background: rgba(255,133,133,.1); }
+  .pill.shipped { color: var(--series-1); border-color: rgba(120,186,255,.35); background: rgba(120,186,255,.1); }
+  .pill.neutral { color: var(--ink-2); border-color: rgba(196,195,189,.28); background: rgba(196,195,189,.08); }
 
   /* ---------- stock list ---------- */
   .stock { list-style: none; display: flex; flex-direction: column; gap: 14px; }
@@ -228,7 +255,7 @@
   .pareto-legend { display:flex; flex-wrap:wrap; gap:8px 16px; margin:0 0 10px; color:var(--ink-2); font-size:12px; }
   .pareto-legend span { display:inline-flex; align-items:center; gap:6px; }
   .legend-swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
-  .legend-line { width:16px; height:2px; display:inline-block; background:#d1d5db; }
+  .legend-line { width:16px; height:2px; display:inline-block; background:var(--ink-2); }
   .legend-bars { background:#9298a3; }
   .abc-table th, .abc-table td { padding-left:12px; padding-right:12px; white-space:nowrap; }
   .abc-table th:first-child, .abc-table td:first-child { padding-left:16px; white-space:normal; }
@@ -252,7 +279,7 @@
   .site-footer a { color: var(--ink-2); }
   #stockSection { scroll-margin-top: 65px; }
   body.loading .tile .value { opacity: .25; }
-  body.loading .tile .value::after { content: ''; display: inline-block; width: 1.8em; height: .7em; border-radius: 5px; background: linear-gradient(90deg,#242422,#3a3a37,#242422); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+  body.loading .tile .value::after { content: ''; display: inline-block; width: 1.8em; height: .7em; border-radius: 5px; background: linear-gradient(90deg,var(--surface-2),var(--grid),var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
   @keyframes shimmer { to { background-position: -200% 0; } }
   @media (max-width: 700px) { .analytics-grid { grid-template-columns: 1fr; } .heatmap { grid-template-columns: 26px repeat(24, minmax(7px, 1fr)); } .heatmap-hours { grid-template-columns: repeat(24, minmax(7px, 1fr)); } .pareto-card { grid-column: auto; } .system-strip { grid-template-columns: 1fr; } }
   @media (max-width: 520px) { .dialog { width: 100%; border-radius: 0; padding: 16px; } }
@@ -301,14 +328,99 @@
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
+
+  /* Shared presentation for both themes; CSS variables also own chart colours. */
+  html { scroll-padding-top: 76px; scrollbar-gutter: stable; }
+  .wrap { max-width: 1400px; padding: 0 44px 40px; }
+  .utility-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 82px; border-bottom: 1px solid var(--border); margin-bottom: 36px; }
+  .store-brand { display: inline-flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; font-size: 15px; font-weight: 650; }
+  .brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: #fff; background: #2563cf; font-size: 23px; }
+  .theme-toggle { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 8px 13px; color: var(--ink-2); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  #themeIcon { font-size: 18px; }
+  .top { align-items: flex-start; gap: 20px; margin-bottom: 24px; }
+  .top h1 { font-size: clamp(28px, 3vw, 38px); letter-spacing: -.045em; font-weight: 650; line-height: 1.15; }
+  .top .sub { margin-top: 12px; font-size: 12px; line-height: 1.7; }
+  .controls { justify-content: flex-end; max-width: 540px; }
+  .header-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; align-items: center; gap: 12px; width: 100%; margin-top: 4px; }
+  .btn, .seg button, .period-custom summary { min-height: 38px; }
+  .btn { font-size: 12px; color: #fff; }
+  .btn.secondary, .sim-btn { background: var(--surface); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--border); }
+  .seg { background: var(--surface-2); padding: 3px; border-color: transparent; }
+  .seg button[aria-pressed="true"] { background: var(--surface); box-shadow: var(--shadow); color: var(--ink); }
+  .section-nav { gap: 24px; margin: 0 0 24px; padding: 0; border-bottom: 1px solid var(--border); }
+  .section-nav a { padding: 14px 2px; border-radius: 0; font-size: 13px; }
+  .section-nav a.active { color: var(--series-1); background: transparent; }
+  .sales-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .card { padding: 24px; box-shadow: var(--shadow); }
+  .card-head { margin-bottom: 24px; }
+  .card h2 { font-size: 16px; letter-spacing: -.02em; }
+  .tiles { grid-template-columns: 1.35fr 1fr 1.1fr 1.25fr; gap: 16px; margin-bottom: 24px; }
+  .tile { position: relative; min-height: 198px; }
+  .tile.hero { background: var(--surface); border-top: 3px solid var(--series-1); padding-top: 22px; }
+  .tile .label { font-size: 12px; line-height: 1.5; min-height: 36px; }
+  .tile .value { font-size: clamp(26px, 2.5vw, 36px); font-weight: 600; letter-spacing: -.045em; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 6px; }
+  .tile.hero .value { font-size: clamp(32px, 3.1vw, 44px); line-height: 1.2; }
+  .delta { margin-top: 12px; font-size: 11px; gap: 4px; }
+  .tile .sparkline { margin-top: 14px; height: 22px; width: 110px; }
+  .stock-tile .label { min-height: auto; }
+  .stock-tile .value { color: var(--warn); }
+  .stock-arrow { float: right; font-size: 18px; color: var(--muted); }
+  .stock-tile .delta { font-size: 10px; margin-top: 6px; }
+  .low-preview { margin-top: 12px; gap: 5px; font-size: 11px; }
+  .low-preview span { white-space: normal; overflow-wrap: anywhere; }
+  .low-preview .out-of-stock { color: var(--crit); }
+  .row { gap: 20px; margin-bottom: 24px; }
+  .row.r1, .row.r2 { grid-template-columns: 1.6fr 1fr; }
+  .chart-box, #topBox { height: 270px; }
+  :is(button, a, input, select, summary):focus-visible { outline: 2px solid var(--series-1); outline-offset: 3px; }
+  tr.order-link:hover td { background: var(--surface-2); }
+  .filters input, .filters select, .mini-btn, .pager button { min-height: 36px; }
+  .stock .name { white-space: normal; overflow-wrap: anywhere; }
+  @media (max-width: 1100px) {
+    .wrap { padding: 0 24px 32px; }
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tile.hero, .tile:last-child { grid-column: auto; }
+    .controls { max-width: none; justify-content: flex-start; }
+    .header-actions { justify-content: flex-start; }
+  }
+  @media (max-width: 760px) {
+    .row.r1, .row.r2 { grid-template-columns: minmax(0, 1fr); }
+    .wrap { padding: 0 16px 24px; }
+    .utility-bar { min-height: 68px; margin-bottom: 24px; }
+    .store-brand { font-size: 13px; gap: 8px; }
+    .theme-toggle { padding: 8px; font-size: 11px; }
+    .top { margin-bottom: 18px; }
+    .top .sub { max-width: 330px; }
+    .controls { width: 100%; gap: 8px; justify-content: flex-start; }
+    .seg button { padding: 7px 12px; }
+    .header-actions { gap: 10px; }
+    .section-nav { gap: 24px; }
+    .card { padding: 18px; }
+    .tile.hero { padding-top: 16px; }
+    .tiles { gap: 12px; }
+    .tile { min-height: 184px; }
+    .tile.hero, .tiles .stock-tile { grid-column: 1 / -1; min-height: auto; }
+    .tile.hero .label { min-height: auto; }
+    .tile.hero .value { font-size: 42px; }
+    .tile .value { font-size: 27px; }
+    .stock-tile .value { font-size: 32px; }
+    .low-preview { font-size: 12px; }
+    .analytics-grid > * { min-width: 0; }
+    .system-strip { grid-template-columns: minmax(0, 1fr); }
+    .toast { max-width: calc(100vw - 32px); width: max-content; }
+  }
 </style>
 </head>
 <body class="loading">
 <div class="wrap">
 
+  <div class="utility-bar">
+    <a class="store-brand" href="#salesSection"><span class="brand-mark" aria-hidden="true">↗</span>Аналітика магазину</a>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="Темна тема" aria-pressed="false"><span aria-hidden="true" id="themeIcon">◐</span><span id="themeLabel">Темна тема</span></button>
+  </div>
   <header class="top">
     <div>
-      <h1>Аналітика магазину</h1>
+      <h1>Огляд продажів</h1>
       <p class="sub"><span id="dataSourceLabel">Замовлення та залишки з OpenCart</span> · <span id="lastSync">Завантаження…</span></p>
     </div>
     <div class="controls">
@@ -325,7 +437,8 @@
           <button class="btn secondary" id="applyDates" type="button">Застосувати</button>
         </div>
       </details>
-      <button class="btn" id="syncBtn" type="button">
+      <div class="header-actions">
+      <button class="btn secondary" id="syncBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
         <span id="syncLabel">Повна синхронізація</span>
       </button>
@@ -336,6 +449,7 @@
       <span class="live" id="live" title="Оновлення даних наживо">
         <i aria-hidden="true"></i><span id="liveText">Підключення…</span>
       </span>
+      </div>
     </div>
   </header>
 
@@ -353,7 +467,7 @@
     <button type="button" id="retryBtn">Повторити</button>
   </div>
 
-  <h2 class="section-title" id="salesSection">Продажі</h2>
+  <h2 class="section-title sales-title" id="salesSection">Продажі</h2>
   <!-- KPI -->
   <section class="tiles" aria-label="Ключові показники">
     <article class="card tile hero">
@@ -374,7 +488,7 @@
       <svg class="sparkline" id="sparkAvg" viewBox="0 0 120 26" role="img" aria-label="Динаміка середнього чека"></svg>
     </article>
     <a class="card tile stock-tile" href="#stockSection" aria-label="Перейти до товарів із низьким залишком">
-      <div class="label">Мало на складі</div>
+      <div class="label">Мало на складі <span class="stock-arrow" aria-hidden="true">↗</span></div>
       <div class="value" id="vLow">—</div>
       <div class="delta" id="dLow">Залишок 5 шт. або менше</div>
       <div class="low-preview" id="lowStockPreview" aria-label="Товари з найменшими залишками"></div>
@@ -655,7 +769,7 @@
 
   const tooltipBase = {
     backgroundColor: C.surface2,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: C.axis,
     borderWidth: 1,
     titleColor: C.ink,
     bodyColor: C.ink2,
@@ -841,7 +955,7 @@
           y: {
             grid: { display: false },
             border: { color: C.axis },
-            ticks: { color: C.ink2, callback(v) { return wrapLabel(this.getLabelForValue(v), 14); } },
+            ticks: { color: C.ink2, autoSkip: false, callback(v) { return wrapLabel(this.getLabelForValue(v), 14); } },
           },
         },
         plugins: {
@@ -963,7 +1077,7 @@
         { type: 'bar', label: 'Виручка', data: rows.map(p => p.revenue), yAxisID: 'y',
           backgroundColor: rows.map(p => colors[p.class]), borderRadius: 4, maxBarThickness: 28 },
         { type: 'line', label: 'Накопичена частка', data: rows.map(p => p.cumulative_share), yAxisID: 'y1',
-          borderColor: '#d1d5db', backgroundColor: '#d1d5db', borderWidth: 2, tension: 0,
+          borderColor: C.ink2, backgroundColor: C.ink2, borderWidth: 2, tension: 0,
           pointRadius: 2, pointHoverRadius: 4 },
       ]},
       options: { responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
@@ -1018,7 +1132,7 @@
   function renderStock(products) {
     inventoryProducts = products;
     const lowItems = [...products].filter(p => Number(p.quantity) <= LOW_STOCK).sort((a, b) => Number(a.quantity) - Number(b.quantity)).slice(0, 3);
-    $('lowStockPreview').innerHTML = lowItems.map(p => `<span title="${esc(p.name)} · ${num(p.quantity)} шт.">${esc(trunc(p.name, 20))} · ${num(p.quantity)}</span>`).join('');
+    $('lowStockPreview').innerHTML = lowItems.map(p => `<span class="${Number(p.quantity) <= 0 ? 'out-of-stock' : ''}" title="${esc(p.name)} · ${num(p.quantity)} шт.">${esc(p.name)} · ${num(p.quantity)} шт.</span>`).join('');
     $('stockToggle').hidden = products.length <= STOCK_ITEMS;
     $('stockToggle').textContent = stockExpanded ? 'Згорнути список' : 'Показати всі';
     const list = stockExpanded ? products : products.slice(0, STOCK_ITEMS);
@@ -1126,6 +1240,45 @@
       $('syncLabel').textContent = 'Повна синхронізація';
     }
   }
+
+
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const dark = theme === 'dark';
+    $('themeToggle').setAttribute('aria-pressed', String(dark));
+    $('themeLabel').textContent = dark ? 'Світла тема' : 'Темна тема';
+    $('themeIcon').textContent = dark ? '☼' : '◐';
+    for (const [key, token] of Object.entries({surface:'surface', surface2:'surface-2', ink:'ink', ink2:'ink-2', muted:'muted', grid:'grid', axis:'axis', series:'series-1'})) {
+      C[key] = css.getPropertyValue('--' + token).trim();
+    }
+    Object.assign(tooltipBase, { backgroundColor: C.surface2, borderColor: C.axis, titleColor: C.ink, bodyColor: C.ink2 });
+    for (const chart of [revenueChart, topChart, paretoChart]) {
+      if (!chart) continue;
+      for (const [name, scale] of Object.entries(chart.options.scales)) {
+        scale.ticks.color = chart === topChart && name === 'y' ? C.ink2 : C.muted;
+        scale.grid.color = C.grid;
+        scale.border.color = C.axis;
+      }
+      Object.assign(chart.options.plugins.tooltip, tooltipBase);
+      if (chart === revenueChart) {
+        Object.assign(chart.data.datasets[0], { borderColor: C.series, pointHoverBackgroundColor: C.series, pointHoverBorderColor: C.surface });
+      } else if (chart === topChart) {
+        chart.data.datasets[0].backgroundColor = C.series;
+      } else {
+        Object.assign(chart.data.datasets[1], { borderColor: C.ink2, backgroundColor: C.ink2 });
+      }
+      chart.update('none');
+    }
+  }
+  $('themeToggle').addEventListener('click', () => {
+    savedTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('dashboardTheme', savedTheme); } catch (_) {}
+    applyTheme(savedTheme);
+  });
+  systemTheme.addEventListener('change', () => {
+    if (!['light', 'dark'].includes(savedTheme)) applyTheme(systemTheme.matches ? 'dark' : 'light');
+  });
+  applyTheme(document.documentElement.dataset.theme);
 
   // ====== события ======
   document.querySelectorAll('.seg button').forEach(b => {
