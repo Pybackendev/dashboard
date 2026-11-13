@@ -3,20 +3,20 @@
 > **Демо:** https://dashboard-frontend-opal-two.vercel.app/
 > Бесплатный сервер засыпает после простоя, поэтому первый заход может занять до минуты: страница сама покажет уведомление и подгрузит данные.
 
-![Превью дашборда](docs/freelancehunt-preview.png)
+![Обзор продаж в светлой теме](docs/dashboard-light.png)
 
 <details>
-<summary>Скриншоты продаж и аналитики</summary>
+<summary>Тёмная тема и мобильный вид</summary>
 
-![Продажи и склад](docs/dashboard-sales.png)
+![Обзор продаж в тёмной теме](docs/dashboard-dark.png)
 
-![Тепловая карта и прогноз остатков](docs/dashboard-analytics.png)
-
-![ABC-анализ и система](docs/dashboard-pareto.png)
+<img src="docs/dashboard-mobile.png" alt="Дашборд на телефоне" width="390">
 
 </details>
 
-OpenCart (MariaDB) → синхронизация → PostgreSQL → FastAPI → дашборд на Chart.js (тёмная тема, без React).
+OpenCart (MariaDB) → синхронизация → PostgreSQL → FastAPI → дашборд на Chart.js.
+
+Дашборд поддерживает светлую и тёмную темы. При первом открытии он использует тему устройства, а затем запоминает ручной выбор. Палитра графиков меняется вместе с темой. На телефоне карточки и графики перестраиваются под ширину экрана.
 
 ## Архитектура
 ```mermaid
